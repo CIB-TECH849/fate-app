@@ -1,0 +1,6 @@
+Flask
+google-generativeai
+markdown-it-py
+python-docx
+sxtwl
+gunicorn

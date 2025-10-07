@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>占卜結果</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+        }
+        h1, h2 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.5rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+        h1 {
+            text-align: center;
+            border-bottom: none;
+            font-size: 2rem;
+            margin-top: 0;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            background-color: #fafafa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .info-item p {
+            margin: 0;
+        }
+        .info-item strong {
+            color: #0056b3;
+        }
+        .interpretation-content h2, 
+        .interpretation-content h3, 
+        .interpretation-content h4 {
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            font-weight: 600;
+        }
+        .interpretation-content ul, 
+        .interpretation-content ol {
+            padding-left: 1.5em;
+        }
+        .interpretation-content p {
+            margin-bottom: 1em;
+        }
+        .interpretation-content blockquote {
+            border-left: 4px solid #007bff;
+            padding-left: 1em;
+            margin-left: 0;
+            color: #555;
+            background-color: #f8f9fa;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 0.6rem 1.2rem;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .back-link:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>梅花易數占卜結果</h1>
+
+        <h2>您的問題</h2>
+        <p>{{ question }}</p>
+
+        <h2>起卦資訊</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <p><strong>起卦數字:</strong> {{ numbers[0] }} (上), {{ numbers[1] }} (下), {{ numbers[2] }} (爻)</p>
+            </div>
+            <div class="info-item">
+                <p><strong>本卦 -> 變卦:</strong> {{ hex_data['本卦'].name }} -> {{ hex_data['變卦'].name }}</p>
+            </div>
+            <div class="info-item">
+                <p><strong>互卦:</strong> {{ hex_data['互卦'].name }}</p>
+            </div>
+            <div class="info-item">
+                <p><strong>動爻:</strong> 第 {{ moving_line }} 爻</p>
+            </div>
+        </div>
+
+        <h2>綜合解讀</h2>
+        <div class="interpretation-content">
+            {{ interpretation }}
+        </div>
+
+        <a href="/" class="back-link">返回主頁重新占卜</a>
+    </div>
+</body>
+</html>

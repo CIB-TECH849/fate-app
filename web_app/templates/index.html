@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梅花易數線上占卜</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 500;
+        }
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .number-inputs {
+            display: flex;
+            gap: 1rem;
+        }
+        .number-inputs .form-group {
+            flex: 1;
+        }
+        button {
+            width: 100%;
+            padding: 0.85rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 1rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>梅花易數線上占卜</h1>
+        <form id="divination-form" action="/divine" method="post">
+            <div class="form-group">
+                <label for="question">您想詢問的具體事由：</label>
+                <textarea id="question" name="question" required></textarea>
+            </div>
+            <p>請輸入三組三位數的數字 (100-999)：</p>
+            <div class="number-inputs">
+                <div class="form-group">
+                    <label for="num1">第一組 (上卦)</label>
+                    <input type="number" id="num1" name="num1" min="100" max="999" required>
+                </div>
+                <div class="form-group">
+                    <label for="num2">第二組 (下卦)</label>
+                    <input type="number" id="num2" name="num2" min="100" max="999" required>
+                </div>
+                <div class="form-group">
+                    <label for="num3">第三組 (變爻)</label>
+                    <input type="number" id="num3" name="num3" min="100" max="999" required>
+                </div>
+            </div>
+            <button type="submit">開始占卜</button>
+        </form>
+        <div id="loading" class="loading">
+            <div class="loader"></div>
+            <p>正在為您解卦，請稍候...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('divination-form').addEventListener('submit', function() {
+            document.getElementById('divination-form').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+        });
+    </script>
+</body>
+</html>
