@@ -19,17 +19,16 @@ from markdown_it import MarkdownIt
 # --- Flask App Initialization ---
 app = Flask(__name__)
 
-# --- API 設定 ---
+# --- API 設定與檢查 ---
+api_key_error_message = ""
 try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("錯誤：請先設定名為 GEMINI_API_KEY 的環境變數。")
+        raise ValueError("錯誤：在 Render 環境變數中找不到 GEMINI_API_KEY。")
     genai.configure(api_key=api_key)
 except Exception as e:
-    # 在網頁上顯示設定錯誤
-    @app.route("/")
-    def api_key_error():
-        return f"<p>API 金鑰設定錯誤：</p><p>{e}</p><p>請確認您已在環境變數中正確設定 GEMINI_API_KEY。</p>", 500
+    api_key_error_message = str(e)
+
 
 # --- 核心功能函式 ---
 
@@ -101,7 +100,15 @@ def call_gemini_api(prompt: str) -> str:
 
 @app.route("/")
 def index():
-    """渲染主輸入頁面"""
+    """渲染主輸入頁面或顯示設定錯誤"""
+    if api_key_error_message:
+        return f"""
+            <h1>應用程式設定錯誤</h1>
+            <p>在啟動過程中發生嚴重錯誤，應用無法啟動。</p>
+            <p><strong>錯誤詳情：</strong></p>
+            <pre style="background-color: #f0f0f0; padding: 1rem; border-radius: 5px;">{api_key_error_message}</pre>
+            <p>請檢查您在 Render 儀表板 (Dashboard) -> Settings -> Environment 中設定的 <code>GEMINI_API_KEY</code> 環境變數是否正確無誤。</p>
+        """, 500
     return render_template("index.html")
 
 @app.route("/divine", methods=["POST"])
