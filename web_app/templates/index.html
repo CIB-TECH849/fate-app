@@ -103,6 +103,9 @@
 </head>
 <body>
     <div class="container">
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <p>如果沒有看到登入頁面，請點擊這裡強制登出： <a href="{{ url_for('logout') }}">強制登出</a></p>
+        </div>
         <h1>梅花易數線上占卜</h1>
         <form id="divination-form" action="/divine" method="post">
             <div class="form-group">

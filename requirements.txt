@@ -4,3 +4,6 @@ markdown-it-py
 python-docx
 sxtwl
 gunicorn
+Flask-SQLAlchemy
+psycopg2-binary
+Flask-Bcrypt
