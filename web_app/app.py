@@ -154,6 +154,27 @@ def login():
             flash('使用者名稱或密碼錯誤', 'error')
     return render_template('login.html')
 
+@app.route("/register", methods=['GET', 'POST'])
+def register():
+    # 只在沒有任何使用者時才開放註冊
+    if User.query.first() is not None:
+        flash('註冊功能已關閉。', 'error')
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        # 第一個註冊的使用者，其 ID 將為 1，自動成為管理員
+        new_user = User(username=username, password_hash=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('管理員帳號註冊成功！請登入。', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
 @app.route("/logout")
 @login_required
 def logout():
