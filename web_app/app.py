@@ -1,14 +1,14 @@
-# app.py (v3 - User Database)
+# app.py (v4 - Admin Panel)
 
 import os
 import sys
 import datetime
 from typing import List, Tuple, Dict
+from functools import wraps
 
 import google.generativeai as genai
-from flask import (Flask, render_template, request, session, redirect, 
+from flask import (Flask, render_template, request, Markup, session, redirect, 
                    url_for, flash)
-from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from markdown_it import MarkdownIt
@@ -24,18 +24,14 @@ app = Flask(__name__)
 # --- API 與應用程式設定 ---
 api_key_error_message = ""
 try:
-    # 從環境變數讀取設定
     app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY")
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    USAGE_LIMIT = int(os.environ.get("USAGE_LIMIT", 100)) # 從環境變數讀取次數上限，預設100
 
-    # 檢查金鑰是否存在
-    if not app.config['SECRET_KEY']:
-        raise ValueError("錯誤：在 Render 環境變數中找不到 SECRET_KEY。")
-    if not app.config['SQLALCHEMY_DATABASE_URI']:
-        raise ValueError("錯誤：在 Render 環境變數中找不到 DATABASE_URL。")
+    if not app.config['SECRET_KEY'] or not app.config['SQLALCHEMY_DATABASE_URI']:
+        raise ValueError("錯誤：找不到 SECRET_KEY 或 DATABASE_URL 環境變數。")
 
-    # 設定 Gemini API 金鑰
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("錯誤：在 Render 環境變數中找不到 GEMINI_API_KEY。")
@@ -55,11 +51,34 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     usage_count = db.Column(db.Integer, default=0, nullable=False)
 
-    def __repr__(self):
-        return f'<User {self.username}>'
+    @property
+    def is_admin(self):
+        return self.id == 1
+
+# --- Decorators for Auth ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or not user.is_admin:
+            flash('只有管理員才能存取此頁面', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --- 核心功能函式 (無變動) ---
 def calculate_hexagram(num1: int, num2: int, num3: int) -> Tuple[List[int], int]:
+    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     upper_trigram_num = num1 % 8 or 8
     lower_trigram_num = num2 % 8 or 8
     moving_line_num = num3 % 6 or 6
@@ -71,6 +90,7 @@ def calculate_hexagram(num1: int, num2: int, num3: int) -> Tuple[List[int], int]
     return lines, moving_line_num
 
 def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int], hex_data: Dict, moving_line_index: int) -> str:
+    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     main_hex = hex_data.get("本卦", {})
     mutual_hex = hex_data.get("互卦", {})
     changing_hex = hex_data.get("變卦", {})
@@ -106,6 +126,7 @@ def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int],
     return prompt
 
 def call_gemini_api(prompt: str) -> str:
+    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     try:
         model = genai.GenerativeModel('models/gemini-pro-latest')
         response = model.generate_content(prompt)
@@ -127,58 +148,61 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and bcrypt.check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
-            flash('登入成功！', 'success')
             return redirect(url_for('index'))
         else:
             flash('使用者名稱或密碼錯誤', 'error')
     return render_template('login.html')
 
-@app.route("/register", methods=['GET', 'POST'])
-def register():
-    if api_key_error_message:
-        return f'''<h1>應用程式設定錯誤</h1><p>{api_key_error_message}</p>''', 500
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
-            flash('此使用者名稱已被註冊', 'error')
-            return redirect(url_for('register'))
-        
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-        new_user = User(username=username, password_hash=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('註冊成功！請登入。', 'success')
-        return redirect(url_for('login'))
-    return render_template('register.html')
-
 @app.route("/logout")
+@login_required
 def logout():
     session.clear()
     flash('您已成功登出', 'success')
     return redirect(url_for('login'))
 
 @app.route("/")
+@login_required
 def index():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if api_key_error_message:
         return f'''<h1>應用程式設定錯誤</h1><p>{api_key_error_message}</p>''', 500
-    return render_template("index.html")
+    user = User.query.get(session['user_id'])
+    return render_template("index.html", user=user)
+
+@app.route("/admin", methods=['GET', 'POST'])
+@admin_required
+def admin():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if not username or not password:
+            flash('使用者名稱和密碼為必填項', 'error')
+        else:
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user:
+                flash('此使用者名稱已被註冊', 'error')
+            else:
+                hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+                new_user = User(username=username, password_hash=hashed_password)
+                db.session.add(new_user)
+                db.session.commit()
+                flash(f'會員 {username} 新增成功！', 'success')
+        return redirect(url_for('admin'))
+
+    users = User.query.all()
+    return render_template("admin.html", users=users)
 
 @app.route("/divine", methods=["POST"])
+@login_required
 def divine():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    # 使用次數計數
     user = User.query.get(session['user_id'])
-    if user:
-        user.usage_count += 1
-        db.session.commit()
+
+    # 檢查使用次數
+    if not user.is_admin and user.usage_count >= USAGE_LIMIT:
+        flash(f'您的占卜次數已達上限 ({USAGE_LIMIT} 次)', 'error')
+        return redirect(url_for('index'))
 
     question = request.form.get("question")
+    # ... (後續占卜邏輯與之前相同，為節省篇幅省略)
     try:
         num1 = int(request.form.get("num1"))
         num2 = int(request.form.get("num2"))
@@ -191,6 +215,11 @@ def divine():
     hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
     prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
     interpretation_html = call_gemini_api(prompt)
+
+    # 僅在成功解卦後增加計數
+    if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
+        user.usage_count += 1
+        db.session.commit()
 
     return render_template("result.html", 
                            question=question, 
