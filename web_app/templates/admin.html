@@ -154,7 +154,12 @@
                     <tr>
                         <td>{{ user.id }}</td>
                         <td>{{ user.username }}</td>
-                        <td>{{ user.usage_count }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('set_usage_count', user_id=user.id) }}" style="display: flex; gap: 5px;">
+                                <input type="number" name="count" value="{{ user.usage_count }}" style="width: 70px;" required>
+                                <button type="submit" style="padding: 5px 10px;">更新</button>
+                            </form>
+                        </td>
                         <td>{{ '管理員' if user.id == 1 else '普通會員' }}</td>
                     </tr>
                     {% endfor %}

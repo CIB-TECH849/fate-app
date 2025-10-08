@@ -28,7 +28,6 @@ try:
     app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY")
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    USAGE_LIMIT = int(os.environ.get("USAGE_LIMIT", 100)) # 從環境變數讀取次數上限，預設100
 
     if not app.config['SECRET_KEY'] or not app.config['SQLALCHEMY_DATABASE_URI']:
         raise ValueError("錯誤：找不到 SECRET_KEY 或 DATABASE_URL 環境變數。")
@@ -213,14 +212,30 @@ def admin():
     users = User.query.all()
     return render_template("admin.html", users=users)
 
+@app.route("/admin/set_count/<int:user_id>", methods=['POST'])
+@admin_required
+def set_usage_count(user_id):
+    user = User.query.get_or_404(user_id)
+    try:
+        new_count = int(request.form.get('count'))
+        if new_count >= 0:
+            user.usage_count = new_count
+            db.session.commit()
+            flash(f"會員 {user.username} 的使用次數已更新為 {new_count} 次。", 'success')
+        else:
+            flash('更新失敗：次數不能為負數。', 'error')
+    except (ValueError, TypeError):
+        flash('更新失敗：請輸入有效的數字。', 'error')
+    return redirect(url_for('admin'))
+
 @app.route("/divine", methods=["POST"])
 @login_required
 def divine():
     user = User.query.get(session['user_id'])
 
-    # 檢查使用次數
-    if not user.is_admin and user.usage_count >= USAGE_LIMIT:
-        flash(f'您的占卜次數已達上限 ({USAGE_LIMIT} 次)', 'error')
+    # 檢查使用次數 (永久 3 次上限)
+    if not user.is_admin and user.usage_count >= 3:
+        flash(f'您的占卜次數已達 3 次上限，無法再使用。', 'error')
         return redirect(url_for('index'))
 
     question = request.form.get("question")
