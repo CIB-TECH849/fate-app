@@ -217,15 +217,28 @@ def admin():
 def set_usage_count(user_id):
     user = User.query.get_or_404(user_id)
     try:
-        new_count = int(request.form.get('count'))
-        if new_count >= 0:
-            user.usage_count = new_count
+        remaining_count = int(request.form.get('count'))
+        if 0 <= remaining_count <= 3:
+            # 將輸入的「剩餘次數」轉換回「已使用次數」存入資料庫
+            user.usage_count = 3 - remaining_count
             db.session.commit()
-            flash(f"會員 {user.username} 的使用次數已更新為 {new_count} 次。", 'success')
+            flash(f"會員 {user.username} 的剩餘次數已更新為 {remaining_count} 次。", 'success')
         else:
-            flash('更新失敗：次數不能為負數。', 'error')
+            flash('更新失敗：剩餘次數必須介於 0 到 3 之間。', 'error')
     except (ValueError, TypeError):
         flash('更新失敗：請輸入有效的數字。', 'error')
+    return redirect(url_for('admin'))
+
+@app.route("/admin/delete_user/<int:user_id>", methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    user_to_delete = User.query.get_or_404(user_id)
+    if user_to_delete.is_admin:
+        flash('無法刪除管理員帳號。', 'error')
+    else:
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        flash(f"會員 {user_to_delete.username} 已被成功刪除。", 'success')
     return redirect(url_for('admin'))
 
 @app.route("/divine", methods=["POST"])
