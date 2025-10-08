@@ -6,8 +6,9 @@ import datetime
 from typing import List, Tuple, Dict
 
 import google.generativeai as genai
-from flask import (Flask, render_template, request, Markup, session, redirect, 
+from flask import (Flask, render_template, request, session, redirect, 
                    url_for, flash)
+from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from markdown_it import MarkdownIt
