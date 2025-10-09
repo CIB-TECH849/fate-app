@@ -5,37 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>梅花易數線上占卜</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f0f2f5;
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f4f6f8;
+            color: #343a40;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            margin: 0;
+            padding: 2rem;
+            box-sizing: border-box;
         }
         .container {
             background-color: #ffffff;
             padding: 2rem 3rem;
             border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             width: 100%;
-            max-width: 600px;
+            max-width: 700px;
             box-sizing: border-box;
+        }
+        h1, h2 {
+            font-weight: 700;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 0.5rem;
         }
         h1 {
             text-align: center;
-            color: #333;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
+            color: #0056b3;
+            border-bottom: none;
+            margin-bottom: 0.5rem;
         }
-        .form-group {
-            margin-bottom: 1.5rem;
+        h2 {
+            color: #343a40;
+            font-size: 1.2rem;
+            margin-top: 0;
+            margin-bottom: 1rem;
         }
         label {
             display: block;
             margin-bottom: 0.5rem;
-            color: #555;
+            color: #495057;
             font-weight: 500;
         }
         input[type="text"],
@@ -43,17 +54,21 @@
         textarea {
             width: 100%;
             padding: 0.75rem;
-            border: 1px solid #ddd;
+            border: 1px solid #ced4da;
+            background-color: #fff;
+            color: #495057;
             border-radius: 8px;
             box-sizing: border-box;
             font-size: 1rem;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            font-family: 'Noto Sans TC', sans-serif;
         }
         input[type="text"]:focus,
         input[type="number"]:focus,
         textarea:focus {
             outline: none;
-            border-color: #007bff;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
         }
         textarea {
             resize: vertical;
@@ -74,12 +89,43 @@
             border: none;
             border-radius: 8px;
             font-size: 1.1rem;
-            font-weight: 600;
+            font-weight: 500;
             cursor: pointer;
             transition: background-color 0.2s;
+            margin-top: 1rem;
+            font-family: 'Noto Sans TC', sans-serif;
         }
         button:hover {
             background-color: #0056b3;
+        }
+        .nav-links {
+            text-align: right; 
+            color: #6c757d;
+            margin-bottom: 1.5rem;
+        }
+        .nav-links strong {
+            color: #0056b3;
+        }
+        .nav-links a {
+            margin-left: 1rem;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .notice-section {
+            margin-bottom: 2rem; 
+            padding: 1.5rem; 
+            background-color: #e9ecef;
+            border-left: 3px solid #007bff;
+            border-radius: 8px;
+            color: #495057;
+        }
+        .notice-section ol, .notice-section ul {
+            padding-left: 1.5rem; 
+            margin: 0;
+        }
+        .notice-section ul {
+            margin-top: 0.5rem;
         }
         .loading {
             display: none;

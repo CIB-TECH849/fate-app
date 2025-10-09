@@ -1,6 +1,12 @@
 # app.py (v4 - Admin Panel)
 
 import os
+from dotenv import load_dotenv
+
+# 在程式的最開始載入 .env 檔案
+load_dotenv()
+
+import sys
 import sys
 import datetime
 from typing import List, Tuple, Dict
@@ -13,6 +19,8 @@ from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from markdown_it import MarkdownIt
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 # --- 將專案根目錄添加到 Python 路徑中 ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +43,11 @@ try:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("錯誤：在 Render 環境變數中找不到 GEMINI_API_KEY。")
+    
+    sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
+    if not sendgrid_api_key:
+        raise ValueError("錯誤：在 Render 環境變數中找不到 SENDGRID_API_KEY。")
+
     genai.configure(api_key=api_key)
 
 except Exception as e:
@@ -136,6 +149,51 @@ def call_gemini_api(prompt: str) -> str:
     except Exception as e:
         return f"<p>呼叫 Gemini API 時出錯：</p><p>{e}</p>"
 
+def send_divination_email(question, numbers, hex_data, interpretation_html, user):
+    """格式化並發送占卜結果郵件"""
+    try:
+        subject = f"梅花易數占卜結果：{question[:20]}..."
+        
+        # 從 interpretation_html 中移除 Markup，以純文字發送
+        body_html = f"""
+        <html>
+        <body style="font-family: sans-serif;">
+            <h2>占卜問題：</h2>
+            <p>{question}</p>
+            <hr>
+            <h2>起卦資訊：</h2>
+            <ul>
+                <li><b>占卜會員：</b> {user.username}</li>
+                <li><b>起卦數字：</b> {numbers[0]} (上), {numbers[1]} (下), {numbers[2]} (爻)</li>
+                <li><b>本卦 -> 變卦：</b> {hex_data['本卦'].get('name')} -> {hex_data['變卦'].get('name')}</li>
+                <li><b>互卦：</b> {hex_data['互卦'].get('name')}</li>
+            </ul>
+            <hr>
+            <h2>AI 綜合解讀：</h2>
+            {interpretation_html}
+        </body>
+        </html>
+        """
+
+        message = Mail(
+            from_email='is33.wu@gmail.com', # 使用已驗證的寄件人
+            to_emails='is33.wu@gmail.com',
+            subject=subject,
+            html_content=body_html
+        )
+        
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        response = sg.send(message)
+        if response.status_code >= 200 and response.status_code < 300:
+            # flash('占卜結果已成功寄送到您的信箱。', 'success') # 已根據使用者要求移除成功訊息
+            pass
+        else:
+            flash(f'郵件發送失敗，錯誤碼：{response.status_code}', 'error')
+
+    except Exception as e:
+        print(f"Email sending failed: {e}")
+        flash(f'郵件發送時發生錯誤: {e}', 'error')
+
 # --- Flask 路由 ---
 
 @app.route("/login", methods=['GET', 'POST'])
@@ -155,11 +213,6 @@ def login():
 
 @app.route("/register", methods=['GET', 'POST'])
 def register():
-    # 只在沒有任何使用者時才開放註冊
-    if User.query.first() is not None:
-        flash('註冊功能已關閉。', 'error')
-        return redirect(url_for('login'))
-
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -169,7 +222,7 @@ def register():
         new_user = User(username=username, password_hash=hashed_password)
         db.session.add(new_user)
         db.session.commit()
-        flash('管理員帳號註冊成功！請登入。', 'success')
+        flash('會員帳號註冊成功!請登入', 'success')
         return redirect(url_for('login'))
     
     return render_template('register.html')
@@ -270,6 +323,8 @@ def divine():
     if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
         user.usage_count += 1
         db.session.commit()
+        # 在成功占卜後發送郵件
+        send_divination_email(question, numbers, hex_data, interpretation_html, user)
 
     return render_template("result.html", 
                            question=question, 
@@ -283,4 +338,4 @@ with app.app_context():
     db.create_all()
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)
