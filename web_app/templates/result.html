@@ -135,6 +135,9 @@
         </div>
 
         <a href="/" class="back-link">返回主頁重新占卜</a>
+        {% if result_id %}
+        <a href="{{ url_for('download_pdf', result_id=result_id) }}" class="back-link" style="background-color: #28a745;">下載 PDF 報告</a>
+        {% endif %}
     </div>
 </body>
 </html>

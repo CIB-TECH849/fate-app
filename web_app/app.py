@@ -1,4 +1,4 @@
-# app.py (v4 - Admin Panel)
+# app.py (v7 - Final Corrected)
 
 import os
 from dotenv import load_dotenv
@@ -7,18 +7,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import sys
-import sys
 import datetime
+import re
+import uuid
 from typing import List, Tuple, Dict
 from functools import wraps
 
 import google.generativeai as genai
-from flask import (Flask, render_template, request, session, redirect, 
-                   url_for, flash)
+from flask import (Flask, render_template, request, session, redirect,
+                   url_for, flash, make_response, Response)
 from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from markdown_it import MarkdownIt
+from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -29,6 +32,7 @@ import gemini_meihua_module as meihua
 
 # --- Flask App 初始化與設定 ---
 app = Flask(__name__)
+TEMP_RESULTS = {} # 用於暫存 PDF 資料的記憶體快取
 
 # --- API 與應用程式設定 ---
 api_key_error_message = ""
@@ -38,15 +42,15 @@ try:
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     if not app.config['SECRET_KEY'] or not app.config['SQLALCHEMY_DATABASE_URI']:
-        raise ValueError("錯誤：找不到 SECRET_KEY 或 DATABASE_URL 環境變數。")
+        raise ValueError("錯誤：找不到 SECRET_KEY 或 DATABASE_URL 環境變數。\n")
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("錯誤：在 Render 環境變數中找不到 GEMINI_API_KEY。")
+        raise ValueError("錯誤：在 Render 環境變數中找不到 GEMINI_API_KEY。\n")
     
     sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
     if not sendgrid_api_key:
-        raise ValueError("錯誤：在 Render 環境變數中找不到 SENDGRID_API_KEY。")
+        raise ValueError("錯誤：在 Render 環境變數中找不到 SENDGRID_API_KEY。\n")
 
     genai.configure(api_key=api_key)
 
@@ -89,9 +93,8 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 核心功能函式 (無變動) ---
+# --- 核心功能函式 ---
 def calculate_hexagram(num1: int, num2: int, num3: int) -> Tuple[List[int], int]:
-    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     upper_trigram_num = num1 % 8 or 8
     lower_trigram_num = num2 % 8 or 8
     moving_line_num = num3 % 6 or 6
@@ -103,7 +106,6 @@ def calculate_hexagram(num1: int, num2: int, num3: int) -> Tuple[List[int], int]
     return lines, moving_line_num
 
 def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int], hex_data: Dict, moving_line_index: int) -> str:
-    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     main_hex = hex_data.get("本卦", {})
     mutual_hex = hex_data.get("互卦", {})
     changing_hex = hex_data.get("變卦", {})
@@ -139,7 +141,6 @@ def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int],
     return prompt
 
 def call_gemini_api(prompt: str) -> str:
-    # ... (此處程式碼與之前版本相同，為節省篇幅省略)
     try:
         model = genai.GenerativeModel('models/gemini-pro-latest')
         response = model.generate_content(prompt)
@@ -150,12 +151,9 @@ def call_gemini_api(prompt: str) -> str:
         return f"<p>呼叫 Gemini API 時出錯：</p><p>{e}</p>"
 
 def send_divination_email(question, numbers, hex_data, interpretation_html, user):
-    """格式化並發送占卜結果郵件"""
     try:
         subject = f"梅花易數占卜結果：{question[:20]}..."
-        
-        # 從 interpretation_html 中移除 Markup，以純文字發送
-        body_html = f"""
+        body_html = f'''
         <html>
         <body style="font-family: sans-serif;">
             <h2>占卜問題：</h2>
@@ -163,7 +161,7 @@ def send_divination_email(question, numbers, hex_data, interpretation_html, user
             <hr>
             <h2>起卦資訊：</h2>
             <ul>
-                <li><b>占卜會員：</b> {user.username}</li>
+                <li><b>占卜會員：</b> {user['username']}</li>
                 <li><b>起卦數字：</b> {numbers[0]} (上), {numbers[1]} (下), {numbers[2]} (爻)</li>
                 <li><b>本卦 -> 變卦：</b> {hex_data['本卦'].get('name')} -> {hex_data['變卦'].get('name')}</li>
                 <li><b>互卦：</b> {hex_data['互卦'].get('name')}</li>
@@ -173,23 +171,17 @@ def send_divination_email(question, numbers, hex_data, interpretation_html, user
             {interpretation_html}
         </body>
         </html>
-        """
-
+        '''
         message = Mail(
-            from_email='is33.wu@gmail.com', # 使用已驗證的寄件人
+            from_email='is33.wu@gmail.com',
             to_emails='is33.wu@gmail.com',
             subject=subject,
             html_content=body_html
         )
-        
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
-        if response.status_code >= 200 and response.status_code < 300:
-            # flash('占卜結果已成功寄送到您的信箱。', 'success') # 已根據使用者要求移除成功訊息
-            pass
-        else:
+        if not (response.status_code >= 200 and response.status_code < 300):
             flash(f'郵件發送失敗，錯誤碼：{response.status_code}', 'error')
-
     except Exception as e:
         print(f"Email sending failed: {e}")
         flash(f'郵件發送時發生錯誤: {e}', 'error')
@@ -213,18 +205,18 @@ def login():
 
 @app.route("/register", methods=['GET', 'POST'])
 def register():
+    if User.query.first() is not None:
+        flash('註冊功能已關閉。', 'error')
+        return redirect(url_for('login'))
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-        # 第一個註冊的使用者，其 ID 將為 1，自動成為管理員
         new_user = User(username=username, password_hash=hashed_password)
         db.session.add(new_user)
         db.session.commit()
         flash('會員帳號註冊成功!請登入', 'success')
         return redirect(url_for('login'))
-    
     return render_template('register.html')
 
 @app.route("/logout")
@@ -261,7 +253,6 @@ def admin():
                 db.session.commit()
                 flash(f'會員 {username} 新增成功！', 'success')
         return redirect(url_for('admin'))
-
     users = User.query.all()
     return render_template("admin.html", users=users)
 
@@ -272,7 +263,6 @@ def set_usage_count(user_id):
     try:
         remaining_count = int(request.form.get('count'))
         if 0 <= remaining_count <= 3:
-            # 將輸入的「剩餘次數」轉換回「已使用次數」存入資料庫
             user.usage_count = 3 - remaining_count
             db.session.commit()
             flash(f"會員 {user.username} 的剩餘次數已更新為 {remaining_count} 次。", 'success')
@@ -298,14 +288,10 @@ def delete_user(user_id):
 @login_required
 def divine():
     user = User.query.get(session['user_id'])
-
-    # 檢查使用次數 (永久 3 次上限)
     if not user.is_admin and user.usage_count >= 3:
         flash(f'您的占卜次數已達 3 次上限，無法再使用。', 'error')
         return redirect(url_for('index'))
-
     question = request.form.get("question")
-    # ... (後續占卜邏輯與之前相同，為節省篇幅省略)
     try:
         num1 = int(request.form.get("num1"))
         num2 = int(request.form.get("num2"))
@@ -313,25 +299,75 @@ def divine():
         numbers = (num1, num2, num3)
     except (ValueError, TypeError):
         return "輸入的數字格式錯誤，請返回上一頁修正。", 400
-
     lines, moving_line = calculate_hexagram(num1, num2, num3)
     hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
     prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
     interpretation_html = call_gemini_api(prompt)
-
-    # 僅在成功解卦後增加計數
+    result_id = None
     if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
         user.usage_count += 1
         db.session.commit()
-        # 在成功占卜後發送郵件
-        send_divination_email(question, numbers, hex_data, interpretation_html, user)
-
+        send_divination_email(question, numbers, hex_data, interpretation_html, {'username': user.username})
+        result_id = uuid.uuid4().hex
+        TEMP_RESULTS[result_id] = {
+            'question': question,
+            'numbers': numbers,
+            'hex_data': hex_data,
+            'interpretation_html': interpretation_html,
+            'user': {'username': user.username}
+        }
     return render_template("result.html", 
                            question=question, 
                            numbers=numbers,
                            hex_data=hex_data,
                            moving_line=moving_line,
-                           interpretation=interpretation_html)
+                           interpretation=interpretation_html,
+                           result_id=result_id)
+
+@app.route("/download_pdf/<result_id>")
+@login_required
+def download_pdf(result_id):
+    last_result = TEMP_RESULTS.pop(result_id, None)
+    if not last_result:
+        flash('找不到占卜結果或下載連結已失效。', 'error')
+        return redirect(url_for('index'))
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.add_font('NotoSansTC', '', 'NotoSansTC-Regular.ttf')
+        pdf.set_font('NotoSansTC', '', 16)
+        pdf.cell(0, 15, '梅花易數占卜報告', new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        pdf.ln(10)
+        pdf.set_font('NotoSansTC', '', 14)
+        pdf.cell(0, 10, '占卜問題：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font('NotoSansTC', '', 12)
+        pdf.multi_cell(0, 10, last_result['question'])
+        pdf.ln(5)
+        pdf.set_font('NotoSansTC', '', 14)
+        pdf.cell(0, 10, '起卦資訊：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font('NotoSansTC', '', 12)
+        info_text = (
+            f"占卜會員： {last_result['user']['username']}\n"
+            f"起卦數字： {last_result['numbers'][0]} (上), {last_result['numbers'][1]} (下), {last_result['numbers'][2]} (爻)\n"
+            f"本卦 -> 變卦： {last_result['hex_data']['本卦'].get('name')} -> {last_result['hex_data']['變卦'].get('name')}\n"
+            f"互卦： {last_result['hex_data']['互卦'].get('name')}"
+        )
+        pdf.multi_cell(0, 10, info_text)
+        pdf.ln(5)
+        pdf.set_font('NotoSansTC', '', 14)
+        pdf.cell(0, 10, 'AI 綜合解讀：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font('NotoSansTC', '', 12)
+        interpretation_text = re.sub('<[^<]+?>', '', last_result['interpretation_html']).strip()
+        pdf.multi_cell(0, 10, interpretation_text)
+        pdf_output = pdf.output()
+        response = Response(pdf_output, mimetype='application/pdf')
+        response.headers['Content-Disposition'] = f'attachment; filename=divination_report_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pdf'
+        
+        return response
+    except Exception as e:
+        print(f"PDF Generation Error: {e}")
+        flash(f'產生 PDF 時發生錯誤: {e}', 'error')
+        return redirect(url_for('index'))
 
 # 使用 app context 來建立資料庫表格
 with app.app_context():
