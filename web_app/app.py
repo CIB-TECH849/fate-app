@@ -14,8 +14,17 @@ from typing import List, Tuple, Dict
 from functools import wraps
 
 import google.generativeai as genai
-from flask import (Flask, render_template, request, session, redirect,
-                   url_for, flash, make_response, Response)
+from flask import (
+    Flask,
+    render_template,
+    request,
+    session,
+    redirect,
+    url_for,
+    flash,
+    make_response,
+    Response,
+)
 from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -341,7 +350,7 @@ def download_pdf(result_id):
         pdf.set_font('NotoSansTC', '', 14)
         pdf.cell(0, 10, '占卜問題：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font('NotoSansTC', '', 12)
-        pdf.multi_cell(0, 10, last_result['question'])
+        pdf.multi_cell(0, 8, last_result['question'])
         pdf.ln(5)
         pdf.set_font('NotoSansTC', '', 14)
         pdf.cell(0, 10, '起卦資訊：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -352,17 +361,16 @@ def download_pdf(result_id):
             f"本卦 -> 變卦： {last_result['hex_data']['本卦'].get('name')} -> {last_result['hex_data']['變卦'].get('name')}\n"
             f"互卦： {last_result['hex_data']['互卦'].get('name')}"
         )
-        pdf.multi_cell(0, 10, info_text)
+        pdf.multi_cell(0, 8, info_text)
         pdf.ln(5)
         pdf.set_font('NotoSansTC', '', 14)
         pdf.cell(0, 10, 'AI 綜合解讀：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font('NotoSansTC', '', 12)
         interpretation_text = re.sub('<[^<]+?>', '', last_result['interpretation_html']).strip()
-        pdf.multi_cell(0, 10, interpretation_text)
+        pdf.multi_cell(0, 8, interpretation_text)
         pdf_output = pdf.output()
         response = Response(pdf_output, mimetype='application/pdf')
         response.headers['Content-Disposition'] = f'attachment; filename=divination_report_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pdf'
-        
         return response
     except Exception as e:
         print(f"PDF Generation Error: {e}")
