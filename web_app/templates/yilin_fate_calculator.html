@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>焦氏直日卦計算機</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .flash { background: #cee5F5; padding: 0.5em; border: 1px solid #aacbe2; margin-bottom: 1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('yilin_index') }}">&larr; 返回焦氏易林主頁</a>
+        <h1>焦氏直日卦計算機</h1>
+        <form method="post">
+            <label for="date">請輸入日期 (YYYY-MM-DD)，留空則使用今天日期：</label>
+            <input type="text" id="date" name="date" value="{{ input_date or '' }}">
+            <input type="submit" value="計算">
+        </form>
+        {% if result and solar_term %}
+        <h2>結果</h2>
+        <p>日期: {{ input_date }}</p>
+        <p>節氣: {{ solar_term }}</p>
+        <p>焦氏直日卦為： <a href="{{ url_for('yilin_hexagram_details', from_hex=result) }}">{{ result }}</a></p>
+        {% elif result %}
+        <h2>結果</h2>
+        <p>{{ result }}</p>
+        {% endif %}
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash">{{ messages[0] }}</div>
+          {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>

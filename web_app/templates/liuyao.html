@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>六爻納甲占卜</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>六爻納甲占卜</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="post" action="{{ url_for('liuyao_divine') }}">
+            <div class="form-group">
+                <label for="input_date">起卦日期 (YYYY-MM-DD，留空則為今天):</label>
+                <input type="date" id="input_date" name="input_date">
+            </div>
+            <div class="form-group">
+                <label for="lines">六爻 (由下往上，0=陰, 1=陽，用逗號分隔，例如: 0,1,0,1,1,1):</label>
+                <input type="text" id="lines" name="lines" pattern="[01](,[01]){5}" title="請輸入六個0或1，用逗號分隔" required>
+            </div>
+            <div class="form-group">
+                <label for="moving_lines">動爻 (1-6，多個請用逗號分隔，無則留空，例如: 3,5):</label>
+                <input type="text" id="moving_lines" name="moving_lines" pattern="^$|([1-6](,[1-6]){0,5})$" title="請輸入1到6的數字，用逗號分隔">
+            </div>
+            <div class="form-group">
+                <label for="question">占卜主題/問題:</label>
+                <input type="text" id="question" name="question" required>
+            </div>
+            <button type="submit">開始占卜</button>
+        </form>
+        <div class="back-link">
+            <p><a href="{{ url_for('index') }}">返回首頁</a></p>
+        </div>
+    </div>
+</body>
+</html>

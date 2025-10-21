@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>編輯卦辭</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        textarea { width: 100%; height: 200px; font-size: 1em; padding: 5px; }
+        input[type="submit"] { padding: 10px 15px; background: #0066cc; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('yilin_hexagram_details', from_hex=from_hex) }}">&larr; 返回</a>
+        <h1>編輯: {{ from_hex }} 之 {{ to_hex }}</h1>
+        <form method="post">
+            <textarea name="verse">{{ verse }}</textarea>
+            <br><br>
+            <input type="submit" value="儲存變更">
+        </form>
+    </div>
+</body>
+</html>

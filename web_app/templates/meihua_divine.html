@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梅花易數線上占卜</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div style="text-align: right; color: #555;">
+            <span>歡迎, <strong>{{ user.username }}</strong></span>
+            <span style="margin-left: 1rem;">剩餘次數: 
+                {% if user.is_admin %}
+                    <strong>無限</strong>
+                {% else %}
+                    <strong>{{ (3 - user.usage_count) if (3 - user.usage_count) > 0 else 0 }}</strong>
+                {% endif %}
+            </span>
+            {% if user.is_admin %}
+                <a href="{{ url_for('admin') }}" style="margin-left: 1rem;">管理員後台</a>
+            {% endif %}
+            <a href="{{ url_for('liuyao_divine') }}" style="margin-left: 1rem;">六爻納甲占卜</a>
+            <a href="{{ url_for('yilin_index') }}" style="margin-left: 1rem;">焦氏易林編輯器</a>
+            <a href="{{ url_for('yilin_fate_calculator') }}" style="margin-left: 1rem;">焦氏直日卦計算機</a>
+            <a href="{{ url_for('logout') }}" style="margin-left: 1rem;">登出</a>
+        </div>
+        <h1>梅花易數線上占卜</h1>
+
+        <div class="notice-section">
+            <h2 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem;">數字占卜須知</h2>
+            <ol style="padding-left: 1.5rem; margin: 0;">
+                <li><b>誠心專注</b>：在占卜前，應誠心默念您想要詢問的事情。</li>
+                <li><b>三不原則</b>：遵循古老的占卜原則，即：
+                    <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
+                        <li>不誠不占：心意不誠懇，不要占卜。</li>
+                        <li>不義不占：事情不符合正道、不具正當性，不要占卜。</li>
+                        <li>不疑不占：沒有真正的疑問，不要為了測試而占卜。</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <form id="divination-form" action="/divine" method="post">
+            <div class="form-group">
+                <label for="question">您想詢問的具體事由：</label>
+                <textarea id="question" name="question" required></textarea>
+            </div>
+            <p>請輸入三組三位數的數字 (100-999)：</p>
+            <div class="number-inputs">
+                <div class="form-group">
+                    <label for="num1">第一組 (上卦)</label>
+                    <input type="number" id="num1" name="num1" min="100" max="999" required>
+                </div>
+                <div class="form-group">
+                    <label for="num2">第二組 (下卦)</label>
+                    <input type="number" id="num2" name="num2" min="100" max="999" required>
+                </div>
+                <div class="form-group">
+                    <label for="num3">第三組 (變爻)</label>
+                    <input type="number" id="num3" name="num3" min="100" max="999" required>
+                </div>
+            </div>
+            <button type="submit">開始占卜</button>
+        </form>
+        <div id="loading" class="loading">
+            <div class="loader"></div>
+            <p>正在為您解卦，請稍候...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('divination-form').addEventListener('submit', function() {
+            document.getElementById('divination-form').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

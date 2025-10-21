@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>六爻納甲占卜結果</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>六爻納甲占卜結果</h1>
+
+        <div class="result-section">
+            <h2>占卜資訊</h2>
+            <p><strong>占卜主題:</strong> {{ question }}</p>
+            <p><strong>占卜日期:</strong> {{ input_date if input_date else "今天" }}</p>
+            <p><strong>日期資訊:</strong> {{ day_info_str }}</p>
+        </div>
+
+        <div class="result-section">
+            <h2>本卦分析: {{ main_analysis.hex_name }}</h2>
+            <p><strong>卦名:</strong> {{ main_analysis.hex_name }} ({{ main_analysis.palace_name }}宮{{ main_analysis.gen_name }})</p>
+            <p><strong>五行屬性:</strong> {{ main_analysis.palace_element }}</p>
+            <h3>爻象細節:</h3>
+            <div class="hexagram-display">
+                {% for line in main_analysis.lines | reverse %}
+                    {% set line_num = loop.length - loop.index0 %}
+                    {% set moving_marker = "●" if line_num in moving_lines else "" %}
+                    {% set empty_marker = "空" if line.is_empty else "" %}
+                    {% set fu_shen_str = "伏(" ~ line.fu_shen.relative ~ line.fu_shen.branch ~ ")" if line.fu_shen else "" %}
+                    {% set full_stem_branch = line.stem ~ line.branch %}
+                    {% set yin_yang_symbol = "—" if line.yin_yang == 1 else "--" %}
+                    {{ "%s %-8s %-3s %-3s %-2s %-3s %-4s %-6s %-4s %-4s %-5s" | format(
+                        line.position,
+                        fu_shen_str,
+                        line.shi_ying,
+                        yin_yang_symbol,
+                        moving_marker,
+                        empty_marker,
+                        line.six_god,
+                        full_stem_branch,
+                        line.branch,
+                        line.element,
+                        line.relative
+                    ) }}
+                    {% if interpretation_details.line_details[line_num] %}
+                        ({{ interpretation_details.line_details[line_num] | join(', ') }})
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if changed_analysis %}
+            <div class="result-section">
+                <h2>變卦分析: {{ changed_analysis.hex_name }}</h2>
+                <p><strong>卦名:</strong> {{ changed_analysis.hex_name }} ({{ changed_analysis.palace_name }}宮{{ changed_analysis.gen_name }})</p>
+                <h3>動爻變化:</h3>
+                <ul>
+                    {% for line_num in moving_lines %}
+                        {% set original_line = main_analysis.lines[line_num - 1] %}
+                        {% set changed_line = changed_analysis.lines[line_num - 1] %}
+                        <li>{{ original_line.position }} {{ original_line.relative }} {{ original_line.branch }} → {{ changed_line.relative }} {{ changed_line.branch }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="result-section">
+            <h2>斷卦參考</h2>
+            {% if interpretation_details.special_type %}
+                <p><strong>特殊卦象:</strong> {{ interpretation_details.special_type }}</p>
+            {% else %}
+                <p>無特殊卦象。</p>
+            {% endif %}
+        </div>
+
+        <div class="result-section">
+            <h2>AI 綜合解讀</h2>
+            <div class="interpretation-text">
+                {{ gemini_interpretation | safe }}
+            </div>
+        </div>
+
+        <div class="back-link">
+            <p><a href="{{ url_for('liuyao_divine') }}">再次占卜</a> | <a href="{{ url_for('index') }}">返回首頁</a></p>
+        </div>
+    </div>
+</body>
+</html>

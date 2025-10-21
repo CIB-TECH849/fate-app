@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>焦氏易林編輯器</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .hex-grid {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .hex-grid li {
+            flex: 0 0 11.5%; /* 8 items per row */
+            box-sizing: border-box;
+            margin: 5px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .hex-grid a { text-decoration: none; color: #0066cc; }
+        .hex-grid a:hover { background-color: #f0f0f0; }
+        .hex-name { font-size: 1.2em; margin-bottom: 5px; }
+        .hex-symbol { font-size: 2em; line-height: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>焦氏易林編輯器 - 選擇起始卦</h1>
+        <div class="nav-link"><a href="{{ url_for('yilin_fate_calculator') }}">前往焦氏直日卦計算機</a></div>
+        <div class="nav-link"><a href="{{ url_for('index') }}">返回主頁</a></div>
+        <ul class="hex-grid">
+            {% for hexagram_name in from_hexagrams %}
+            <li>
+                <a href="{{ url_for('yilin_hexagram_details', from_hex=hexagram_name) }}">
+                    <div class="hex-name">{{ hex_info[hexagram_name].number }}. {{ hexagram_name }}</div>
+                    <div class="hex-symbol">{{ hex_info[hexagram_name].symbol }}</div>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+</html>
