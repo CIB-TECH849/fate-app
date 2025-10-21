@@ -214,19 +214,8 @@ def login():
 
 @app.route("/register", methods=['GET', 'POST'])
 def register():
-    if User.query.first() is not None:
-        flash('註冊功能已關閉。', 'error')
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-        new_user = User(username=username, password_hash=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('會員帳號註冊成功!請登入', 'success')
-        return redirect(url_for('login'))
-    return render_template('register.html')
+    flash('註冊功能已關閉，請聯絡管理員以取得帳號。', 'info')
+    return redirect(url_for('login'))
 
 @app.route("/logout")
 @login_required
