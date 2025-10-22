@@ -262,6 +262,97 @@ def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int],
 '''
     return prompt
 
+def generate_relationship_prompt(question: str, hex_data: Dict, moving_line_index: int) -> str:
+    # Extract relevant data from hex_data
+    main_hex = hex_data.get("本卦", {})
+    mutual_hex = hex_data.get("互卦", {})
+    changing_hex = hex_data.get("變卦", {})
+
+    # Placeholder for detailed logic to determine upper/lower trigrams,
+    # male/female hexagrams, Qian-Kun six sons, etc.
+    # This will require more detailed hexagram data than currently available in hex_data
+    # For now, I'll use placeholders and focus on the prompt structure.
+
+    # Example: Determine if it's a "Jiao" (交) or "Bu Jiao" (不交) situation
+    # This would require mapping hexagrams to their trigram compositions and then to male/female attributes.
+    # For simplicity, let's assume we can derive this from hex_data if it were more detailed.
+    # For now, I'll use generic descriptions.
+
+    prompt = f'''
+請扮演一位精通《周易》卜筮與「乾坤六子」男女取象法的易學專家，擅長以卦名卦義、卦象與爻辭結合現代語言分析感情關係。
+你了解婚合之象的原理「交易為吉」——即男下女上為婚合，男上女下為不交。
+你也能根據乾坤六子判斷男女性格、婚姻潛質與吉凶。
+若為同性婚姻，請依相對陽陰性與角色配對，或用「長下少上」的同性交易原理輔助判斷。
+
+解卦時請遵循以下分析步驟，條理清晰地分段說明。
+
+🔹【一、卦名卦義與經文】
+
+說明此卦的名稱與典故。
+本卦：《{main_hex.get('name', '未知')}》
+卦辭：{main_hex.get('judgement', '')}
+
+若卦名或卦辭直接提及婚姻（如「女歸吉」、「勿用取女」、「歸妹」），直接給出結論（可成或不可成）。
+若卦義模糊，則轉入卦象層面進一步分析。
+
+🔹【二、卦象分析】
+
+說明上卦與下卦屬性（如：上為天、下為地）。
+上卦：{main_hex.get('upper_trigram_name', '未知')} (屬性: {main_hex.get('upper_trigram_attribute', '未知')})
+下卦：{main_hex.get('lower_trigram_name', '未知')} (屬性: {main_hex.get('lower_trigram_attribute', '未知')})
+
+判斷是否為「交易之象」：
+男卦在下、女卦在上 → 男女有交、感情可成。
+男卦在上、女卦在下 → 不交、不宜婚。
+（此處需根據卦象具體判斷，目前為通用說明）
+
+指出上、下卦屬哪一類乾坤六子：
+男卦：乾（父）、震（長男）、坎（中男）、艮（少男）
+女卦：坤（母）、巽（長女）、離（中女）、兌（少女）
+（此處需根據卦象具體判斷，目前為通用說明）
+
+根據配對關係說明：
+長男配長女 → 穩定、門當戶對。
+中男配中女 → 情深但多憂慮、坎陷之象。
+少男配少女 → 年輕氣盛、情感衝動但變數大。
+（此處需根據卦象具體判斷，目前為通用說明）
+
+若有交而卦義不吉（如困、未濟、渙），請說明可能的婚後困境（如多勞、分離、憂慮）。
+
+🔹【三、爻義與爻象分析】
+
+若有變爻，請指出變爻位置與陰陽變化。
+動爻：第 {moving_line_index} 爻
+（此處需根據爻辭具體分析）
+
+分析「應」與「比」：
+遠應（初與四、二與五、三與上）陰陽相應則有情通。
+比應（陽上陰下）則為情投意合。
+若陰陽不應、上下失交，代表感情不順或緣淺。
+（此處需根據爻象具體分析）
+
+若變卦形成交象（男下女上），則為後期可成；反之則可能破局。
+變卦：《{changing_hex.get('name', '未知')}》
+卦辭：{changing_hex.get('judgement', '')}
+
+🔹【四、同性婚姻輔助原則（如適用）】
+（此處需根據具體情況判斷，目前為通用說明）
+
+🔹【五、綜合判斷】
+
+統整卦名、卦象、爻象、變卦後給出整體評價：
+（此處需根據綜合分析給出具體評價）
+
+給出建議（例如：「宜順其自然」、「需誠信相待」、「暫緩婚事」、「分則兩利」等）。
+
+🔹【六、附註】
+
+若卦象與爻象相衝，請以變爻或變卦為主。
+若卦象雖交而卦義不吉，則為「有情難成」之象。
+若無變爻，則以本卦為主。
+'''
+    return prompt
+
 def call_gemini_api(prompt: str) -> str:
     start_time = datetime.datetime.now()
     success = False
@@ -1094,6 +1185,8 @@ def divine():
         flash(f'您的占卜次數已達 3 次上限，無法再使用。', 'error')
         return redirect(url_for('meihua_divine_page'))
     question = request.form.get("question")
+    category = request.form.get("category") # Get the category
+
     try:
         num1 = int(request.form.get("num1"))
         num2 = int(request.form.get("num2"))
@@ -1104,7 +1197,12 @@ def divine():
         return redirect(url_for('meihua_divine_page'))
     lines, moving_line = calculate_hexagram(num1, num2, num3)
     hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
-    prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
+
+    # Select prompt based on category
+    if category == "relationship":
+        prompt = generate_relationship_prompt(question, hex_data, moving_line)
+    else: # Default to general interpretation
+        prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
     interpretation_html = call_gemini_api(prompt)
     result_id = None
     if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
@@ -1142,6 +1240,7 @@ def liuyao_divine():
         lines_str = request.form.get("lines")
         moving_lines_str = request.form.get("moving_lines")
         question = request.form.get("question")
+        category = request.form.get("category") # Get the category
 
         input_date = None
         if input_date_str:
@@ -1203,7 +1302,14 @@ def liuyao_divine():
         
         llm_formatted_data = liuyao.format_for_llm(main_analysis, changed_analysis, interpretation_details, day_info_str, question)
         
-        prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
+        # Select prompt based on category
+        if category == "relationship":
+            # TODO: Implement a specific generate_liuyao_relationship_prompt function
+            # For now, using general prompt for all categories in Liu Yao
+            prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
+        else: # Default to general interpretation
+            prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
+
         gemini_interpretation_html = call_gemini_api(prompt)
 
         if user and "呼叫 Gemini API 時出錯" not in gemini_interpretation_html:
