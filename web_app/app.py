@@ -353,6 +353,150 @@ def generate_relationship_prompt(question: str, hex_data: Dict, moving_line_inde
 '''
     return prompt
 
+def generate_marriage_prompt(question: str, main_analysis: Dict, changed_analysis: Dict, interpretation_details: Dict, day_info_str: str) -> str:
+    # Extract relevant data from main_analysis, changed_analysis, interpretation_details
+    # This will require careful mapping of liuyao_system's output to the prompt's requirements.
+
+    # Placeholder for 世爻, 應爻, 財爻, 官鬼, 子孫, 父母, etc.
+    # liuyao_system.py's analysis_result['lines'] contains some of this.
+    # We need to iterate through lines to find 世爻, 應爻, 財爻, 官鬼.
+
+    shi_line_info = ""
+    ying_line_info = ""
+    cai_yao_info = ""
+    guan_gui_info = ""
+    zi_sun_info = ""
+    fu_mu_info = ""
+
+    for line in main_analysis.get('lines', []):
+        if line.get('shi_ying') == '世':
+            shi_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        elif line.get('shi_ying') == '應':
+            ying_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        if line.get('relative') == '妻財':
+            cai_yao_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '官鬼':
+            guan_gui_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '子孫':
+            zi_sun_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '父母':
+            fu_mu_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+
+    cai_yao_info = cai_yao_info.strip(', ') if cai_yao_info else "未見"
+    guan_gui_info = guan_gui_info.strip(', ') if guan_gui_info else "未見"
+    zi_sun_info = zi_sun_info.strip(', ') if zi_sun_info else "未見"
+    fu_mu_info = fu_mu_info.strip(', ') if fu_mu_info else "未見"
+
+    # Determine upper/lower trigram names and elements
+    upper_trigram_name = liuyao.HEXAGRAM_COMPOSITION.get(main_analysis['hex_name'], ('', ''))[0]
+    lower_trigram_name = liuyao.HEXAGRAM_COMPOSITION.get(main_analysis['hex_name'], ('', ''))[1]
+    upper_trigram_element = liuyao.PALACE_ELEMENTS.get(upper_trigram_name, '未知')
+    lower_trigram_element = liuyao.PALACE_ELEMENTS.get(lower_trigram_name, '未知')
+
+    # Determine 世爻為陽/陰, 應爻為陽/陰
+    shi_yao_yin_yang = ""
+    ying_yao_yin_yang = ""
+    for line in main_analysis.get('lines', []):
+        if line.get('shi_ying') == '世':
+            shi_yao_yin_yang = "陽" if line.get('yin_yang') == 1 else "陰"
+        elif line.get('shi_ying') == '應':
+            ying_yao_yin_yang = "陽" if line.get('yin_yang') == 1 else "陰"
+
+    # Determine if it's a "Jiao" (交易之象) or "Bu Jiao" (不交)
+    # This is complex and requires mapping trigrams to male/female attributes.
+    # For now, I'll provide the trigram names and let Gemini infer.
+    jiao_xiang = "（需AI判斷）" # Placeholder
+
+    prompt = f'''
+你是一位精通《易經》、《增刪卜易》與《焦氏易林》的卜卦專家，熟悉六爻婚姻章七首中各條象理、陰陽配偶論、財鬼生剋、世應比和之法。
+請根據我提供的卦象資料，進行婚姻占卜白話解釋，並從下列七個面向全面說明：
+
+**占卜問題：** {question}
+**起卦日期資訊：** {day_info_str}
+
+**卦象資料：**
+本卦：《{main_analysis.get('hex_name', '未知')}》
+變卦：《{changed_analysis.get('hex_name', '未知') if changed_analysis else '無變卦'}》
+動爻：第 {main_analysis.get('moving_lines_in_main', ['無'])[0]} 爻 (若有)
+
+**本卦爻象細節：**
+{liuyao.format_for_llm(main_analysis, changed_analysis, interpretation_details, day_info_str, question)}
+
+**關鍵爻資訊：**
+世爻：{shi_line_info} ({shi_yao_yin_yang})
+應爻：{ying_line_info} ({ying_yao_yin_yang})
+財爻 (妻)：{cai_yao_info}
+官鬼 (夫)：{guan_gui_info}
+子孫 (情緣)：{zi_sun_info}
+父母 (家庭支持)：{fu_mu_info}
+
+---
+
+🧭 **一、卦象結構與關鍵爻**
+
+說明卦名、內外卦五行、世應位置，指出「財爻（妻）」、「官鬼（夫）」的狀態。
+
+💍 **二、婚姻吉凶判斷**
+
+依〈婚姻章〉口訣對照說明：
+「內身陽鬼丈夫持」
+「外應財陰總是妻」
+「世應相生婚大吉」
+「比和世應配相宜」
+等句，用白話指出婚姻能否順利、彼此是否相生相剋。
+
+👫 **三、男女配合與感情互動**
+
+根據詩句：
+「青龍六合扶為美，三合子孫臨更奇，應動三刑刑莫問，外交六害害無疑。」
+分析夫妻是否和諧、有無貴人撮合、或有刑沖害之象。
+
+💞 **四、感情緣份深淺**
+
+引用歌訣：
+「一奇一耦成親順，雙鬼雙財匹配違。」
+說明雙方陰陽是否相合，是否有外緣或再婚之象。
+
+👨‍👩‍👧 **五、性格與外貌分析**
+
+依下列詩句進行白話解釋：
+「坎主心聰艮沉靜，兌必和柔巽必恭，坤爻寬厚乾剛正，文明女子為逢離，智慧男兒因見震。」
+「乾宮面部大而寬，坤主魁肥莫小看，艮卦決然身體小，坎爻定是臉團圓。」
+逐條對應男女的外型與性格特徵。
+
+🏠 **六、家庭與長久性**
+
+引用詩句：
+「若逢天寡天鰥殺，夫婦應知不久長。」
+「陰陽得位俱稱吉，純陰枉使心和力，純陽退悔不成婚。」
+分析婚後是否長久、是否有孤寡、爭執或再婚之兆。
+
+💰 **七、財福與生活條件**
+
+依歌訣：
+「青龍旺相臨財位，娶妻萬倍有資粧。」
+「本宮無炁財有炁，婦舍雖貧女容媚；本宮旺相財囚死，婦舍雖貧女不美。」
+以白話分析婚後財運、配偶條件、生活福分。
+
+✍️ **最後結語（卜辭）**
+
+請用一段古風收尾總斷，總結婚姻結果（如「此卦陰陽相生，情投意合，可成良緣」或「陰陽乖隔，緣薄如霧，不宜勉強」）。
+
+✅ **補充規則**
+
+若世爻為陽、應爻為陰 → 男占女
+若世爻為陰、應爻為陽 → 女占男
+
+財爻代表妻、官鬼代表夫、子孫代表情緣、父母代表媒人與家庭支持
+
+動爻變化則參考變卦吉凶，重點觀「財鬼生剋」與「世應關係」
+
+📘 **範例開場句（可附卦）**
+
+問婚姻卦：{main_analysis.get('hex_name', '未知')} ({upper_trigram_name}上{lower_trigram_name}下)，世爻持{shi_line_info}，應爻臨{ying_line_info}。
+'''
+    return prompt
+
 def call_gemini_api(prompt: str) -> str:
     start_time = datetime.datetime.now()
     success = False
@@ -1316,9 +1460,7 @@ def liuyao_divine():
         
         # Select prompt based on category
         if category == "relationship":
-            # TODO: Implement a specific generate_liuyao_relationship_prompt function
-            # For now, using general prompt for all categories in Liu Yao
-            prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
+            prompt = generate_marriage_prompt(question, main_analysis, changed_analysis, interpretation_details, day_info_str)
         else: # Default to general interpretation
             prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
 
