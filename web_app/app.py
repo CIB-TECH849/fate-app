@@ -497,6 +497,146 @@ def generate_marriage_prompt(question: str, main_analysis: Dict, changed_analysi
 '''
     return prompt
 
+def generate_career_prompt(question: str, main_analysis: Dict, changed_analysis: Dict, interpretation_details: Dict, day_info_str: str, yilin_verse: Dict = None) -> str:
+    # Extract relevant data from main_analysis, changed_analysis, interpretation_details
+    # This will require careful mapping of liuyao_system's output to the prompt's requirements.
+
+    # Placeholder for 世爻, 應爻, 官鬼, 父母爻, 子孫, 兄弟, 妻財.
+    shi_line_info = ""
+    ying_line_info = ""
+    guan_gui_info = ""
+    fu_mu_info = ""
+    zi_sun_info = ""
+    xiong_di_info = ""
+    cai_yao_info = ""
+
+    for line in main_analysis.get('lines', []):
+        if line.get('shi_ying') == '世':
+            shi_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        elif line.get('shi_ying') == '應':
+            ying_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        if line.get('relative') == '官鬼':
+            guan_gui_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '父母':
+            fu_mu_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '子孫':
+            zi_sun_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '兄弟':
+            xiong_di_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '妻財':
+            cai_yao_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+
+    guan_gui_info = guan_gui_info.strip(', ') if guan_gui_info else "未見"
+    fu_mu_info = fu_mu_info.strip(', ') if fu_mu_info else "未見"
+    zi_sun_info = zi_sun_info.strip(', ') if zi_sun_info else "未見"
+    xiong_di_info = xiong_di_info.strip(', ') if xiong_di_info else "未見"
+    cai_yao_info = cai_yao_info.strip(', ') if cai_yao_info else "未見"
+
+    # Yilin verse
+    yilin_text = "無焦氏易林詩句"
+    if yilin_verse:
+        yilin_text = f"本卦《{yilin_verse['from']}》變《{yilin_verse['to']}》：{yilin_verse['verse']}"
+
+    prompt = f'''
+你是一位精通《易經》、《增刪卜易》與《焦氏易林》的卜卦專家，熟悉六爻婚姻章七首中各條象理、陰陽配偶論、財鬼生剋、世應比和之法。
+請依據我輸入的卦象資料（含本卦、互卦、變卦、焦氏易林詩句、占卜主題），
+生成一份完整、白話、結構清晰的「仕宦卦解析報告」，格式如下：
+
+**占卜問題：** {question}
+**起卦日期資訊：** {day_info_str}
+
+**卦象資料：**
+本卦：《{main_analysis.get('hex_name', '未知')}》
+變卦：《{changed_analysis.get('hex_name', '未知') if changed_analysis else '無變卦'}》
+動爻：第 {main_analysis.get('moving_lines_in_main', ['無'])[0]} 爻 (若有)
+
+**本卦爻象細節：**
+{liuyao.format_for_llm(main_analysis, changed_analysis, interpretation_details, day_info_str, question)}
+
+**關鍵爻資訊：**
+世爻：{shi_line_info}
+應爻：{ying_line_info}
+官鬼 (職位/丈夫)：{guan_gui_info}
+父母爻 (文書/批示)：{fu_mu_info}
+子孫 (情緣/下屬)：{zi_sun_info}
+兄弟 (競爭者/同僚)：{xiong_di_info}
+妻財 (財物/妻子)：{cai_yao_info}
+
+---
+
+一、卦象總覽
+
+本卦名稱與象義：說明卦德與官運象徵（例如「明夷卦：內明外暗，宜守位以避禍」）。
+
+變卦與互卦意義：指出事勢的潛在變化與發展方向。
+
+焦氏易林詩句：完整引用詩文，逐句解釋其官祿象徵。
+{yilin_text}
+
+二、仕宦章理論分析（六親＋納甲＋官象）
+1️⃣ 世應定位
+
+世爻：代表我方／本人仕途地位。
+應爻：代表外界（長官、組織、人事單位）。
+說明二者相生相剋之關係，推判人際、升遷、或外部壓力。
+
+2️⃣ 官鬼與父母爻
+
+官鬼旺相：代表官運上升、職權增加。
+父母爻動：代表文書批示、公文、考核等機會。
+若父母爻旺而相生，為得上命之象；若剋身則主責難或審核壓力。
+
+3️⃣ 驛馬、符印、太歲
+
+驛馬動：主調職、陞遷、外派、新任命。
+符印臨官鬼或世爻：主得詔命、得上賞、功名成。
+太歲合世：主入朝見上級、升遷得遇貴人。
+
+4️⃣ 子孫、兄弟、財爻
+
+子孫持世：主心逸志散、易招懶惰，求官不成。
+兄弟旺動：主競爭者多，或同僚牽制。
+妻財動剋官鬼：主財物耗損、爭權導致官運受阻。
+
+三、《仕宦章》白話判斷依據
+
+請根據以下古訣逐條比對、轉譯成現代語境：
+
+「父動為先鬼次看」 → 若父爻動且生世，則先得上命或考績提拔。
+「驛馬相扶官職遷」 → 若驛馬臨官鬼或世爻，主有陞遷、外調、調任新職。
+「鬼臨身世得官真」 → 官鬼旺相且臨身，是真得職之象。
+「子孫持世必隳官」 → 若子爻主世，宜守不宜動。
+「太歲合時見天子」 → 若太歲與世爻相合，主有機會見上級、受任命。
+「人吏空亡難立腳」 → 若初爻或人吏位空亡，主組織內下屬不力或執行困難。
+「符印動時喜詔書」 → 若父母或官爻兼符印動，主文書命令將至。
+「身剋人吏百憂攢」 → 若世剋初爻，主壓力過重、人事緊張。
+
+四、焦氏易林詩義解釋
+
+將焦氏詩文逐句白話解釋，結合官運意象：
+
+比如：「稷為堯使」象徵賢臣受命、有才能被重用；
+「拜請百福」象徵得上司支持、職位安穩；
+「賜我喜子」象徵部屬得力、計畫圓滿完成。
+
+五、現代語境解讀（仕途應用）
+
+結合卦象與詩意，判斷目前職場情況（如內部問題、升遷機會、人事派系）。
+提出具體行動建議：
+若「宜靜」則建議守勢、等待機會。
+若「宜動」則主積極請命、外調可成。
+若「應剋世」則防上級壓力與同僚爭功。
+
+六、吉凶總評
+
+綜合整體卦象與仕宦章判法，歸納出：
+官運總評（上升／停滯／下滑）
+貴人與障礙來源
+近期吉時（可依月令、太歲）
+建議採取之具體行動（如「宜陳功報上」、「暫避鋒芒」、「請調外任」等）
+'''
+    return prompt
+
 def call_gemini_api(prompt: str) -> str:
     start_time = datetime.datetime.now()
     success = False
@@ -1461,6 +1601,23 @@ def liuyao_divine():
         # Select prompt based on category
         if category == "relationship":
             prompt = generate_marriage_prompt(question, main_analysis, changed_analysis, interpretation_details, day_info_str)
+        elif category == "career":
+            # Retrieve Yilin verse
+            yilin_data = parse_sql_file()
+            yilin_verse = None
+            if changed_analysis and changed_analysis.get('hex_name'):
+                # Find verse for main hexagram changing to changed hexagram
+                for entry in yilin_data:
+                    if entry['from'] == main_analysis['hex_name'] and entry['to'] == changed_analysis['hex_name']:
+                        yilin_verse = entry
+                        break
+            if not yilin_verse: # If no changing hexagram or no specific verse found, try main hexagram to itself
+                for entry in yilin_data:
+                    if entry['from'] == main_analysis['hex_name'] and entry['to'] == main_analysis['hex_name']:
+                        yilin_verse = entry
+                        break
+
+            prompt = generate_career_prompt(question, main_analysis, changed_analysis, interpretation_details, day_info_str, yilin_verse)
         else: # Default to general interpretation
             prompt = liuyao.LLM_PROMPT_TEMPLATE + "\n\n" + llm_formatted_data
 
