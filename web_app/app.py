@@ -34,6 +34,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from flask_cors import CORS
 
 # --- 將專案根目錄添加到 Python 路徑中 ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -46,6 +47,7 @@ SQL_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '
 
 # --- Flask App 初始化與設定 ---
 app = Flask(__name__)
+CORS(app) # Enable CORS for all routes and all origins
 TEMP_RESULTS = {} # 用於暫存 PDF 資料的記憶體快取
 
 # --- API 與應用程式設定 ---
@@ -91,6 +93,18 @@ class User(db.Model):
     def is_admin(self):
         return self.id == 1
 
+class RequestLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    endpoint = db.Column(db.String(255), nullable=False)
+    method = db.Column(db.String(10), nullable=False)
+    status_code = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    response_status = db.Column(db.String(20), nullable=False) # 'success', 'client_error', 'server_error'
+
+    def __repr__(self):
+        return f"<RequestLog {self.id} {self.timestamp} {self.endpoint} {self.status_code}>"
+
 # --- Decorators for Auth ---
 def login_required(f):
     @wraps(f)
@@ -123,8 +137,53 @@ def api_key_required(f):
 
         if api_key_header == EXTERNAL_API_KEY or api_key_param == EXTERNAL_API_KEY:
             return f(*args, **kwargs)
+    return decorated_function
+
+def log_request(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        start_time = datetime.datetime.now()
+        response = f(*args, **kwargs) # Execute the original route function
+
+        # Determine status code and response status
+        status_code = 500 # Default to 500 if not explicitly set
+        response_status = 'server_error'
+
+        if isinstance(response, tuple): # If the view returns (response, status_code)
+            status_code = response[1]
+            if 200 <= status_code < 300:
+                response_status = 'success'
+            elif 400 <= status_code < 500:
+                response_status = 'client_error'
+            else:
+                response_status = 'server_error'
+        elif isinstance(response, Response): # If the view returns a Response object
+            status_code = response.status_code
+            if 200 <= status_code < 300:
+                response_status = 'success'
+            elif 400 <= status_code < 500:
+                response_status = 'client_error'
+            else:
+                response_status = 'server_error'
+        # If response is just a string (e.g., "Hello World"), assume 200 OK
         else:
-            return jsonify({"error": "無效的 API Key"}), 401 # 401 Unauthorized
+            status_code = 200
+            response_status = 'success'
+
+        user_id = session.get('user_id')
+
+        log_entry = RequestLog(
+            timestamp=start_time,
+            endpoint=request.path,
+            method=request.method,
+            status_code=status_code,
+            user_id=user_id,
+            response_status=response_status
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+
+        return response
     return decorated_function
 
 # --- 核心功能函式 ---
@@ -309,7 +368,36 @@ def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed
 
 @app.route("/api/meihua_divine", methods=["POST"])
 @api_key_required
+@log_request
 def api_meihua_divine():
+    """
+    梅花易數占卜 API 端點。
+    接收占卜問題和三組數字，返回占卜結果和 AI 解讀。
+    ---
+    請求範例 (JSON Body):
+    {
+        "question": "我的事業發展前景如何？",
+        "num1": 123,
+        "num2": 456,
+        "num3": 789
+    }
+    --- 
+    回應範例 (JSON Response):
+    {
+        "ai_interpretation_html": "<p>AI 解讀內容...</p>",
+        "changing_hexagram": "火天大有",
+        "changing_hexagram_judgement": "大有：元亨。",
+        "main_hexagram": "乾為天",
+        "main_hexagram_judgement": "乾：元亨利貞。",
+        "message": "梅花易數占卜成功",
+        "moving_line": 6,
+        "mutual_hexagram": "天風姤",
+        "mutual_hexagram_judgement": "姤：女壯，勿用取女。",
+        "numbers": [123, 456, 789],
+        "question": "我的事業發展前景如何？",
+        "status": "success"
+    }
+    """
     data = request.get_json()
     
     if not data:
@@ -769,6 +857,7 @@ def write_sql_file(data):
 # --- Flask 路由 ---
 
 @app.route("/login", methods=['GET', 'POST'])
+@log_request
 def login():
     if api_key_error_message:
         return f'''<h1>應用程式設定錯誤</h1><p>{api_key_error_message}</p>''', 500
@@ -784,6 +873,7 @@ def login():
     return render_template('login.html')
 
 @app.route("/register", methods=['GET', 'POST'])
+@log_request
 def register():
     # This route is now open for public registration
     if request.method == 'POST':
@@ -803,6 +893,7 @@ def register():
 
 @app.route("/logout")
 @login_required
+@log_request
 def logout():
     session.clear()
     flash('您已成功登出', 'success')
@@ -810,6 +901,7 @@ def logout():
 
 @app.route("/")
 @login_required
+@log_request
 def index():
     if api_key_error_message:
         return f'''<h1>應用程式設定錯誤</h1><p>{api_key_error_message}</p>''', 500
@@ -818,12 +910,14 @@ def index():
 
 @app.route("/meihua")
 @login_required
+@log_request
 def meihua_divine_page():
     user = User.query.get(session['user_id'])
     return render_template("meihua_divine.html", user=user)
 
 @app.route("/admin", methods=['GET', 'POST'])
 @admin_required
+@log_request
 def admin():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -844,8 +938,16 @@ def admin():
     users = User.query.all()
     return render_template("admin.html", users=users)
 
+@app.route("/admin/request_logs")
+@admin_required
+@log_request
+def request_logs():
+    logs = RequestLog.query.order_by(RequestLog.timestamp.desc()).all()
+    return render_template("request_logs.html", logs=logs)
+
 @app.route("/admin/set_count/<int:user_id>", methods=['POST'])
 @admin_required
+@log_request
 def set_usage_count(user_id):
     user = User.query.get_or_404(user_id)
     try:
@@ -862,6 +964,7 @@ def set_usage_count(user_id):
 
 @app.route("/admin/delete_user/<int:user_id>", methods=['POST'])
 @admin_required
+@log_request
 def delete_user(user_id):
     user_to_delete = User.query.get_or_404(user_id)
     if user_to_delete.is_admin:
@@ -874,6 +977,7 @@ def delete_user(user_id):
 
 @app.route("/divine", methods=["POST"])
 @login_required
+@log_request
 def divine():
     user = User.query.get(session['user_id'])
     if not user.is_admin and user.usage_count >= 3:
@@ -915,6 +1019,7 @@ def divine():
 
 @app.route("/liuyao", methods=["GET", "POST"])
 @login_required
+@log_request
 def liuyao_divine():
     if request.method == "POST":
         user = User.query.get(session['user_id'])
@@ -1012,6 +1117,7 @@ def liuyao_divine():
 
 @app.route('/yilin_index')
 @login_required
+@log_request
 def yilin_index():
     data = parse_sql_file()
     from_hexagrams = list(set(entry['from'] for entry in data))
@@ -1032,6 +1138,7 @@ def yilin_index():
 
 @app.route('/yilin_hexagram/<from_hex>')
 @login_required
+@log_request
 def yilin_hexagram_details(from_hex):
     data = parse_sql_file()
 
@@ -1051,6 +1158,7 @@ def yilin_hexagram_details(from_hex):
 
 @app.route('/yilin_edit/<from_hex>/<to_hex>', methods=['GET', 'POST'])
 @login_required
+@log_request
 def yilin_edit_verse(from_hex, to_hex):
     data = parse_sql_file()
     entry_to_edit = None
@@ -1075,6 +1183,7 @@ def yilin_edit_verse(from_hex, to_hex):
 
 @app.route('/yilin_fate_calculator', methods=['GET', 'POST'])
 @login_required
+@log_request
 def yilin_fate_calculator():
     result = None
     solar_term = None
@@ -1099,6 +1208,7 @@ def yilin_fate_calculator():
 
 @app.route("/download_pdf/<result_id>")
 @login_required
+@log_request
 def download_pdf(result_id):
     last_result = TEMP_RESULTS.pop(result_id, None)
     if not last_result:
@@ -1140,6 +1250,15 @@ def download_pdf(result_id):
         print(f"PDF Generation Error: {e}")
         flash(f'產生 PDF 時發生錯誤: {e}', 'error')
         return redirect(url_for('index'))
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    # For API requests, return a JSON error response
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "內部伺服器錯誤", "message": "伺服器發生未知錯誤，請稍後再試。"}), 500
+    # For non-API requests, you might want to render a custom error page
+    # For now, we'll just return a generic message
+    return "<h1>500 Internal Server Error</h1><p>伺服器發生未知錯誤，請稍後再試。</p>", 500
 
 # 使用 app context 來建立資料庫表格
 with app.app_context():

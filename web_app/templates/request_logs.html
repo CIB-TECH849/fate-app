@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>請求日誌</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        th {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .log-success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .log-client-error {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .log-server-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>請求日誌</h1>
+        <p><a href="{{ url_for('admin') }}">&larr; 返回管理員後台</a></p>
+
+        {% if logs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>時間戳記</th>
+                    <th>端點</th>
+                    <th>方法</th>
+                    <th>狀態碼</th>
+                    <th>使用者ID</th>
+                    <th>回應狀態</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.id }}</td>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.endpoint }}</td>
+                    <td>{{ log.method }}</td>
+                    <td>{{ log.status_code }}</td>
+                    <td>{{ log.user_id if log.user_id else 'N/A' }}</td>
+                    <td class="log-{{ log.response_status.replace('_', '-') }}">{{ log.response_status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>目前沒有請求日誌。</p>
+        {% endif %}
+    </div>
+</body>
+</html>

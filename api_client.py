@@ -14,6 +14,10 @@ if not API_KEY:
     print("錯誤：請在 .env 檔案中設定 EXTERNAL_API_KEY。")
     exit()
 
+# --- Debugging: Print configuration ---
+print(f"DEBUG: API_ENDPOINT = {API_ENDPOINT}")
+print(f"DEBUG: API_KEY (partial) = {API_KEY[:4]}...{API_KEY[-4:]}") # Mask part of the key for security
+
 # --- Function to make API request ---
 def get_meihua_divination(question: str, num1: int, num2: int, num3: int):
     headers = {
@@ -27,8 +31,17 @@ def get_meihua_divination(question: str, num1: int, num2: int, num3: int):
         "num3": num3
     }
 
+    # Debugging: Print request details
+    print(f"DEBUG: Request Headers = {headers}")
+    print(f"DEBUG: Request Payload = {payload}")
+
     try:
         response = requests.post(API_ENDPOINT, headers=headers, json=payload)
+        
+        # Debugging: Print raw response details before raising for status
+        print(f"DEBUG: Raw Response Status Code = {response.status_code}")
+        print(f"DEBUG: Raw Response Content = {response.text}")
+
         response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
         return response.json()
     except requests.exceptions.RequestException as e:
