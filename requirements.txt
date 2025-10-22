@@ -10,3 +10,4 @@ Flask-Bcrypt
 python-dotenv
 sendgrid
 fpdf2
+Flask-Cors

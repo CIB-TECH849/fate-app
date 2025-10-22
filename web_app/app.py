@@ -105,6 +105,22 @@ class RequestLog(db.Model):
     def __repr__(self):
         return f"<RequestLog {self.id} {self.timestamp} {self.endpoint} {self.status_code}>"
 
+class ExternalApiLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
+    api_name = db.Column(db.String(50), nullable=False) # e.g., 'Gemini', 'SendGrid'
+    endpoint = db.Column(db.String(255), nullable=True) # The specific API endpoint called
+    method = db.Column(db.String(10), nullable=True) # HTTP method (GET, POST)
+    request_payload = db.Column(db.Text, nullable=True) # JSON or other payload sent
+    response_status_code = db.Column(db.Integer, nullable=True)
+    response_content = db.Column(db.Text, nullable=True) # Raw response content
+    duration_ms = db.Column(db.Float, nullable=True) # Request duration in milliseconds
+    success = db.Column(db.Boolean, nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f"<ExternalApiLog {self.id} {self.timestamp} {self.api_name} {self.success}>"
+
 # --- Decorators for Auth ---
 def login_required(f):
     @wraps(f)
@@ -234,16 +250,51 @@ def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int],
     return prompt
 
 def call_gemini_api(prompt: str) -> str:
+    start_time = datetime.datetime.now()
+    success = False
+    error_message = None
+    response_text = ""
+    status_code = None
+
     try:
         model = genai.GenerativeModel('models/gemini-pro-latest')
         response = model.generate_content(prompt)
+        response_text = response.text
+        status_code = 200 # Assuming 200 for successful content generation
+        success = True
         md = MarkdownIt()
-        html = md.render(response.text)
+        html = md.render(response_text)
         return Markup(html)
     except Exception as e:
-        return f"<p>呼叫 Gemini API 時出錯：</p><p>{e}</p>"
+        error_message = str(e)
+        response_text = f"<p>呼叫 Gemini API 時出錯：</p><p>{e}</p>"
+        status_code = 500 # Assuming 500 for API call failure
+        return Markup(response_text)
+    finally:
+        end_time = datetime.datetime.now()
+        duration_ms = (end_time - start_time).total_seconds() * 1000
+        log_entry = ExternalApiLog(
+            timestamp=start_time,
+            api_name='Gemini',
+            endpoint='/models/gemini-pro-latest', # Generic endpoint for Gemini
+            method='POST', # Assuming it's a POST request
+            request_payload=prompt,
+            response_status_code=status_code,
+            response_content=response_text,
+            duration_ms=duration_ms,
+            success=success,
+            error_message=error_message
+        )
+        db.session.add(log_entry)
+        db.session.commit()
 
 def send_divination_email(question, numbers, hex_data, interpretation_html, user):
+    start_time = datetime.datetime.now()
+    success = False
+    error_message = None
+    response_status_code = None
+    response_content = None
+
     try:
         subject = f"梅花易數占卜結果：{question[:20]}..."
         body_html = f'''
@@ -273,13 +324,42 @@ def send_divination_email(question, numbers, hex_data, interpretation_html, user
         )
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
+        response_status_code = response.status_code
+        response_content = response.body # SendGrid response body
         if not (response.status_code >= 200 and response.status_code < 300):
             flash(f'郵件發送失敗，錯誤碼：{response.status_code}', 'error')
+            error_message = f'SendGrid 錯誤碼: {response.status_code}'
+        else:
+            success = True
     except Exception as e:
         print(f"Email sending failed: {e}")
         flash(f'郵件發送時發生錯誤: {e}', 'error')
+        error_message = str(e)
+    finally:
+        end_time = datetime.datetime.now()
+        duration_ms = (end_time - start_time).total_seconds() * 1000
+        log_entry = ExternalApiLog(
+            timestamp=start_time,
+            api_name='SendGrid',
+            endpoint='/mail/send', # SendGrid's mail send endpoint
+            method='POST',
+            request_payload=f"Subject: {subject}, To: is33.wu@gmail.com", # Log relevant parts of the request
+            response_status_code=response_status_code,
+            response_content=response_content,
+            duration_ms=duration_ms,
+            success=success,
+            error_message=error_message
+        )
+        db.session.add(log_entry)
+        db.session.commit()
 
 def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed_analysis, moving_lines, interpretation_details, gemini_interpretation, user):
+    start_time = datetime.datetime.now()
+    success = False
+    error_message = None
+    response_status_code = None
+    response_content = None
+
     try:
         subject = f"六爻納甲占卜結果：{question[:20]}..."
         
@@ -360,11 +440,34 @@ def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed
         )
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
+        response_status_code = response.status_code
+        response_content = response.body # SendGrid response body
         if not (response.status_code >= 200 and response.status_code < 300):
             flash(f'六爻郵件發送失敗，錯誤碼：{response.status_code}', 'error')
+            error_message = f'SendGrid 錯誤碼: {response.status_code}'
+        else:
+            success = True
     except Exception as e:
         print(f"Liu Yao Email sending failed: {e}")
         flash(f'六爻郵件發送時發生錯誤: {e}', 'error')
+        error_message = str(e)
+    finally:
+        end_time = datetime.datetime.now()
+        duration_ms = (end_time - start_time).total_seconds() * 1000
+        log_entry = ExternalApiLog(
+            timestamp=start_time,
+            api_name='SendGrid',
+            endpoint='/mail/send', # SendGrid's mail send endpoint
+            method='POST',
+            request_payload=f"Subject: {subject}, To: is33.wu@gmail.com", # Log relevant parts of the request
+            response_status_code=response_status_code,
+            response_content=response_content,
+            duration_ms=duration_ms,
+            success=success,
+            error_message=error_message
+        )
+        db.session.add(log_entry)
+        db.session.commit()
 
 @app.route("/api/meihua_divine", methods=["POST"])
 @api_key_required
@@ -944,6 +1047,13 @@ def admin():
 def request_logs():
     logs = RequestLog.query.order_by(RequestLog.timestamp.desc()).all()
     return render_template("request_logs.html", logs=logs)
+
+@app.route("/admin/external_api_logs")
+@admin_required
+@log_request
+def external_api_logs():
+    logs = ExternalApiLog.query.order_by(ExternalApiLog.timestamp.desc()).all()
+    return render_template("external_api_logs.html", logs=logs)
 
 @app.route("/admin/set_count/<int:user_id>", methods=['POST'])
 @admin_required

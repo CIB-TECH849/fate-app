@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>外部 API 請求日誌</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 0.75rem;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .log-success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .log-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .log-details {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #f1f1f1;
+            padding: 5px;
+            border-radius: 3px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>外部 API 請求日誌</h1>
+        <p><a href="{{ url_for('admin') }}">&larr; 返回管理員後台</a></p>
+
+        {% if logs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>時間戳記</th>
+                    <th>API 名稱</th>
+                    <th>端點</th>
+                    <th>方法</th>
+                    <th>狀態碼</th>
+                    <th>成功</th>
+                    <th>耗時 (ms)</th>
+                    <th>錯誤訊息</th>
+                    <th>請求內容</th>
+                    <th>回應內容</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.id }}</td>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.api_name }}</td>
+                    <td>{{ log.endpoint }}</td>
+                    <td>{{ log.method }}</td>
+                    <td>{{ log.response_status_code if log.response_status_code else 'N/A' }}</td>
+                    <td class="log-{{ 'success' if log.success else 'error' }}">{{ '是' if log.success else '否' }}</td>
+                    <td>{{ "%.2f" | format(log.duration_ms) if log.duration_ms else 'N/A' }}</td>
+                    <td><div class="log-details">{{ log.error_message if log.error_message else 'N/A' }}</div></td>
+                    <td><div class="log-details">{{ log.request_payload if log.request_payload else 'N/A' }}</div></td>
+                    <td><div class="log-details">{{ log.response_content if log.response_content else 'N/A' }}</div></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>目前沒有外部 API 請求日誌。</p>
+        {% endif %}
+    </div>
+</body>
+</html>
