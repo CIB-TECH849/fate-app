@@ -49,6 +49,18 @@ SQL_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '
 # --- Flask App 初始化與設定 ---
 app = Flask(__name__)
 CORS(app) # Enable CORS for all routes and all origins
+
+TAIWAN_TZ = pytz.timezone('Asia/Taipei')
+
+@app.template_filter('to_taiwan_time')
+def to_taiwan_time_filter(utc_dt):
+    if not utc_dt:
+        return ""
+    # Ensure the datetime object is timezone-aware UTC
+    if utc_dt.tzinfo is None:
+        utc_dt = pytz.utc.localize(utc_dt)
+    return utc_dt.astimezone(TAIWAN_TZ).strftime('%Y-%m-%d %H:%M:%S')
+
 TEMP_RESULTS = {} # 用於暫存 PDF 資料的記憶體快取
 
 # --- API 與應用程式設定 ---
