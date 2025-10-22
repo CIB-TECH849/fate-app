@@ -41,6 +41,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(current_dir))
 import gemini_meihua_module as meihua
 import liuyao_system as liuyao
+import pytz
 
 # Define SQL_FILE_PATH for yilin.sql
 SQL_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'yilin.sql')
@@ -450,6 +451,17 @@ def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed
     except Exception as e:
         print(f"Liu Yao Email sending failed: {e}")
         flash(f'六爻郵件發送時發生錯誤: {e}', 'error')
+
+TAIWAN_TZ = pytz.timezone('Asia/Taipei')
+
+@app.template_filter('to_taiwan_time')
+def to_taiwan_time_filter(utc_dt):
+    if not utc_dt:
+        return ""
+    # Ensure the datetime object is timezone-aware UTC
+    if utc_dt.tzinfo is None:
+        utc_dt = pytz.utc.localize(utc_dt)
+    return utc_dt.astimezone(TAIWAN_TZ).strftime('%Y-%m-%d %H:%M:%S')
         error_message = str(e)
     finally:
         end_time = datetime.datetime.now()

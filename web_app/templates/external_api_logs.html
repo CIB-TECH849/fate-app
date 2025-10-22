@@ -70,7 +70,7 @@
                 {% for log in logs %}
                 <tr>
                     <td>{{ log.id }}</td>
-                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.timestamp | to_taiwan_time }}</td>
                     <td>{{ log.api_name }}</td>
                     <td>{{ log.endpoint }}</td>
                     <td>{{ log.method }}</td>
