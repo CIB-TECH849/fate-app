@@ -1214,15 +1214,27 @@ def divine():
             'question': question,
             'numbers': numbers,
             'hex_data': hex_data,
+            'moving_line': moving_line,
             'interpretation_html': interpretation_html,
             'user': {'username': user.username}
         }
+        return redirect(url_for('show_result', result_id=result_id))
+
+@app.route("/result/<result_id>")
+@login_required
+@log_request
+def show_result(result_id):
+    result_data = TEMP_RESULTS.get(result_id)
+    if not result_data:
+        flash('找不到占卜結果或連結已失效。', 'error')
+        return redirect(url_for('index'))
+    
     return render_template("result.html", 
-                           question=question, 
-                           numbers=numbers,
-                           hex_data=hex_data,
-                           moving_line=moving_line,
-                           interpretation=interpretation_html,
+                           question=result_data['question'], 
+                           numbers=result_data['numbers'],
+                           hex_data=result_data['hex_data'],
+                           moving_line=result_data['moving_line'],
+                           interpretation=result_data['interpretation_html'],
                            result_id=result_id)
 
 @app.route("/liuyao", methods=["GET", "POST"])
