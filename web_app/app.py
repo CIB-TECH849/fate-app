@@ -24,6 +24,7 @@ from flask import (
     flash,
     make_response,
     Response,
+    jsonify,
 )
 from markupsafe import Markup
 from flask_sqlalchemy import SQLAlchemy
@@ -65,6 +66,11 @@ try:
     if not sendgrid_api_key:
         raise ValueError("錯誤：在 Render 環境變數中找不到 SENDGRID_API_KEY。\n")
 
+    # Add API_KEY for external API access
+    EXTERNAL_API_KEY = os.environ.get("EXTERNAL_API_KEY")
+    if not EXTERNAL_API_KEY:
+        raise ValueError("錯誤：在 Render 環境變數中找不到 EXTERNAL_API_KEY。\n")
+
     genai.configure(api_key=api_key)
 
 except Exception as e:
@@ -104,6 +110,21 @@ def admin_required(f):
             flash('只有管理員才能存取此頁面', 'error')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
+    return decorated_function
+
+def api_key_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key_header = request.headers.get('X-API-KEY')
+        api_key_param = request.args.get('api_key')
+
+        if not EXTERNAL_API_KEY:
+            return jsonify({"error": "API Key 未設定"}), 500
+
+        if api_key_header == EXTERNAL_API_KEY or api_key_param == EXTERNAL_API_KEY:
+            return f(*args, **kwargs)
+        else:
+            return jsonify({"error": "無效的 API Key"}), 401 # 401 Unauthorized
     return decorated_function
 
 # --- 核心功能函式 ---
@@ -285,6 +306,66 @@ def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed
     except Exception as e:
         print(f"Liu Yao Email sending failed: {e}")
         flash(f'六爻郵件發送時發生錯誤: {e}', 'error')
+
+@app.route("/api/meihua_divine", methods=["POST"])
+@api_key_required
+def api_meihua_divine():
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "無效的 JSON 輸入"}), 400
+
+    question = data.get("question")
+    num1 = data.get("num1")
+    num2 = data.get("num2")
+    num3 = data.get("num3")
+
+    if not all([question, num1, num2, num3]):
+        return jsonify({"error": "缺少必要的占卜參數 (question, num1, num2, num3)"}), 400
+    
+    try:
+        num1 = int(num1)
+        num2 = int(num2)
+        num3 = int(num3)
+        if not (100 <= num1 <= 999 and 100 <= num2 <= 999 and 100 <= num3 <= 999):
+            return jsonify({"error": "數字必須介於 100 到 999 之間"}), 400
+    except ValueError:
+        return jsonify({"error": "數字格式錯誤，請輸入有效的整數"}), 400
+
+    # 執行梅花易數的計算邏輯
+    numbers = (num1, num2, num3)
+    lines, moving_line = calculate_hexagram(num1, num2, num3)
+    hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
+
+    prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
+    interpretation_html = call_gemini_api(prompt)
+
+    if "呼叫 Gemini API 時出錯" in interpretation_html:
+        return jsonify({"error": "AI 解讀服務暫時無法使用", "details": str(interpretation_html)}), 500 # 將 Markup 轉換為字串
+
+    # 如果您需要對 API 呼叫也進行次數限制，可以在此處實作
+    # user = User.query.get(session['user_id']) # 如果有登入驗證
+    # if user and not user.is_admin and user.usage_count >= 3:
+    #     return jsonify({"error": "您的占卜次數已達上限"}), 403
+    # if user:
+    #     user.usage_count += 1
+    #     db.session.commit()
+
+    response_data = {
+        "question": question,
+        "numbers": numbers,
+        "main_hexagram": hex_data["本卦"]["name"],
+        "main_hexagram_judgement": hex_data["本卦"]["judgement"],
+        "mutual_hexagram": hex_data["互卦"]["name"],
+        "mutual_hexagram_judgement": hex_data["互卦"]["judgement"],
+        "changing_hexagram": hex_data["變卦"]["name"],
+        "changing_hexagram_judgement": hex_data["變卦"]["judgement"],
+        "moving_line": moving_line,
+        "ai_interpretation_html": str(interpretation_html), # 將 Markup 物件轉換為字串
+        "status": "success",
+        "message": "梅花易數占卜成功"
+    }
+    return jsonify(response_data), 200
 
 # --- 節氣資料 ---
 
