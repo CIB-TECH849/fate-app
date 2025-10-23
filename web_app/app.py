@@ -637,6 +637,183 @@ def generate_career_prompt(question: str, main_analysis: Dict, changed_analysis:
 '''
     return prompt
 
+def generate_illness_prompt(question: str, main_analysis: Dict, changed_analysis: Dict, interpretation_details: Dict, day_info_str: str, yilin_verse: Dict = None, inquirer_relationship: str = "") -> str:
+    # Extract relevant data from main_analysis, changed_analysis, interpretation_details
+    # This will require careful mapping of liuyao_system's output to the prompt's requirements.
+
+    # Placeholder for 世爻, 應爻, 官鬼, 父母爻, 子孫, 兄弟, 妻財.
+    shi_line_info = ""
+    ying_line_info = ""
+    guan_gui_info = ""
+    fu_mu_info = ""
+    zi_sun_info = ""
+    xiong_di_info = ""
+    cai_yao_info = ""
+
+    for line in main_analysis.get('lines', []):
+        if line.get('shi_ying') == '世':
+            shi_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        elif line.get('shi_ying') == '應':
+            ying_line_info = f"{line.get('position')} {line.get('relative')} {line.get('branch')} ({line.get('element')})"
+        if line.get('relative') == '官鬼':
+            guan_gui_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '父母':
+            fu_mu_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '子孫':
+            zi_sun_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '兄弟':
+            xiong_di_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+        elif line.get('relative') == '妻財':
+            cai_yao_info += f"{line.get('position')} {line.get('branch')} ({line.get('element')}), "
+
+    guan_gui_info = guan_gui_info.strip(', ') if guan_gui_info else "未見"
+    fu_mu_info = fu_mu_info.strip(', ') if fu_mu_info else "未見"
+    zi_sun_info = zi_sun_info.strip(', ') if zi_sun_info else "未見"
+    xiong_di_info = xiong_di_info.strip(', ') if xiong_di_info else "未見"
+    cai_yao_info = cai_yao_info.strip(', ') if cai_yao_info else "未見"
+
+    # Yilin verse
+    yilin_text = "無焦氏易林詩句"
+    if yilin_verse:
+        yilin_text = f"本卦《{yilin_verse['from']}》變《{yilin_verse['to']}》：{yilin_verse['verse']}"
+
+    prompt = f'''
+你是一位精通《周易》六爻、焦氏易林與京房納甲法的易學大師，
+熟悉《疾病章》古法判病之理，能以白話方式說明卦中疾病輕重、臟腑歸屬、康復時機、死生關口、親屬關聯。
+
+請依據我輸入的卦象資料（含本卦、變卦、互卦、焦氏易林詩句、占卜主題與代問者關係），
+生成一份完整、現代化、條理分明的疾病卦分析報告，格式如下：
+
+**占卜問題：** {question}
+**代問者關係：** {inquirer_relationship if inquirer_relationship else '本人占卜'}
+**起卦日期資訊：** {day_info_str}
+
+**卦象資料：**
+本卦：《{main_analysis.get('hex_name', '未知')}》
+變卦：《{changed_analysis.get('hex_name', '未知') if changed_analysis else '無變卦'}》
+動爻：第 {main_analysis.get('moving_lines_in_main', ['無'])[0]} 爻 (若有)
+
+**本卦爻象細節：**
+{liuyao.format_for_llm(main_analysis, changed_analysis, interpretation_details, day_info_str, question)}
+
+**關鍵爻資訊：**
+世爻：{shi_line_info}
+應爻：{ying_line_info}
+官鬼 (病根/病邪)：{guan_gui_info}
+父母爻 (氣血/精神/藥效)：{fu_mu_info}
+子孫爻 (藥/醫治/免疫力)：{zi_sun_info}
+兄弟爻 (氣脈阻礙/血氣失調)：{xiong_di_info}
+妻財爻 (飲食/身體負擔)：{cai_yao_info}
+
+---
+
+一、卦象總覽
+
+本卦名稱與象義：說明卦德與病情整體氣象（如「明夷卦：暗中受損，主氣血不暢」）。
+
+變卦與互卦提示：指出病勢轉變方向或康復關鍵。
+
+焦氏易林詩句：引用並白話解釋其中健康象徵。
+{yilin_text}
+
+二、六親定位與問卜關係
+
+說明問卜者與病者關係（本人、父母、配偶、子女、朋友、下屬）。
+（此處需AI根據 inquirer_relationship 判斷）
+
+說明代表病者的爻（通常取「世爻」或「被問之爻」）。
+（此處需AI根據 inquirer_relationship 判斷）
+
+分析六親的關聯：
+
+父母爻：主氣血、精神、文書與藥效。
+妻財爻：主飲食、身體負擔與耗損。
+官鬼爻：為病根、病邪、外來侵擾。
+子孫爻：為藥、醫治、免疫力、康復象。
+兄弟爻：為氣脈阻礙、血氣失調、外力干擾。
+
+三、《疾病章》理論逐條白話分析
+1️⃣ 病源與輕重
+
+官鬼為病根：鬼動則病重；鬼靜則病緩。
+子孫生世：主藥效顯、病可癒。
+子孫化鬼：主藥反為害。
+官鬼化兄／化財：主病轉壞、財耗多。
+官鬼化子：主轉安、病漸癒。
+六爻靜卦：主病久難癒。
+官鬼旺相、財旺身空：主危險、有生死之兆。
+
+2️⃣ 病象與臟腑歸屬
+
+請根據五行與方位分析病位：
+水為腰腎、泌尿、生殖系統
+金為肺與氣管
+火為心臟與血脈
+木為肝膽與筋骨
+土為脾胃與腫脹
+
+並依八卦身體對應說明：
+乾：頭、上焦、精神
+坤：腹、腸胃
+震：足
+巽：手
+坎：耳、腎
+離：目、心
+艮：鼻
+兌：口
+
+例：
+「水鬼臨身」 → 主腎水不足、泌尿系統問題。
+「火鬼貼身」 → 主發炎、高燒、心血不寧。
+
+3️⃣ 特殊神煞應驗
+
+勾陳臨身：病阻難解，或有外傷。
+玄武臨命：主暗疾、感染、拖延。
+螣蛇白虎動：主驚恐、手術、喪厄。
+身命空亡：主虛脫、危象、魂不附體。
+青龍子孫旺：主良醫得遇、藥效顯著。
+
+4️⃣ 卦例對照（古法直譯）
+
+以下古句轉為白話提示：
+
+「逢龍見子放心寬」 → 子孫旺、青龍扶，主有康復希望。
+「官鬼臨身更不堪」 → 病邪入體，難以控制。
+「財旺身空身必喪」 → 體虛而勞、耗財又損命。
+「鬼化為財凶有準」 → 病拖財散，恐有後續惡化。
+「鬼爻化子瘥無疑」 → 若病鬼化子孫，主得藥效痊癒。
+「虎鬼同興應哭泣」 → 白虎與鬼同動，主凶兆。
+「龍孫並旺保平安」 → 青龍子孫動旺，主康復。
+「六爻安靜尤難瘥」 → 若無一爻動，主久病難起。
+「明夷蠱夬剝豐同」 → 凡得此六卦，多主病危或臟腑衰。
+
+四、家屬代問應象解讀
+
+根據代問者不同，說明卦義如何轉換：
+子問父母 → 父母爻為主。
+父母問子女 → 子孫爻為主。
+妻問夫 → 官鬼爻為主。
+夫問妻 → 財爻為主。
+兄弟問兄弟 → 兄爻為主。
+
+五、現代語境解析
+
+以白話說明病勢走向與行動建議：
+若「子孫旺」→ 可治、宜信醫。
+若「官鬼旺」→ 病根深、宜守不宜動。
+若「財動剋世」→ 體力虛、不可勞累。
+若「父母旺」→ 有藥可解。
+若「白虎動」→ 應防手術或喪厄。
+
+六、吉凶總評
+
+病勢趨向：漸安／拖延／危險／轉機出現。
+康復時機：指出依卦氣五行推測的月份或節氣。
+行動建議：靜養、換醫、調理、忌勞、或宜轉信念。
+'''
+    return prompt
+
 def call_gemini_api(prompt: str) -> str:
     start_time = datetime.datetime.now()
     success = False

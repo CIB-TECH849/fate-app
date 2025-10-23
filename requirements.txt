@@ -12,3 +12,5 @@ sendgrid
 fpdf2
 Flask-Cors
 pytz
+PyPDF2
+pdfminer.six
