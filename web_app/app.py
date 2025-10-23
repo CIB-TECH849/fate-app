@@ -134,6 +134,35 @@ class ExternalApiLog(db.Model):
     def __repr__(self):
         return f"<ExternalApiLog {self.id} {self.timestamp} {self.api_name} {self.success}>"
 
+class IChingHexagram(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(10), unique=True, nullable=False) # e.g., "乾"
+    full_name = db.Column(db.String(20), nullable=True) # e.g., "乾為天"
+    number = db.Column(db.String(2), unique=True, nullable=False) # e.g., "01"
+    symbol = db.Column(db.String(5), nullable=True) # e.g., "䷀"
+    hexagram_text = db.Column(db.Text, nullable=True) # 卦辭
+    tuan_zhuan = db.Column(db.Text, nullable=True) # 彖傳
+    xiang_zhuan_da = db.Column(db.Text, nullable=True) # 大象
+    wen_yan = db.Column(db.Text, nullable=True) # 文言傳 (only for Qian/Kun)
+
+    lines = db.relationship('IChingLine', backref='hexagram', lazy=True)
+
+    def __repr__(self):
+        return f"<IChingHexagram {self.number}. {self.name}>"
+
+class IChingLine(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    hexagram_id = db.Column(db.Integer, db.ForeignKey('i_ching_hexagram.id'), nullable=False)
+    line_number = db.Column(db.Integer, nullable=False) # 1 to 6, or 7 for 用九
+    line_name = db.Column(db.String(10), nullable=False) # e.g., "初九", "九二", "用九"
+    line_text = db.Column(db.Text, nullable=True) # 爻辭
+    xiang_zhuan_xiao = db.Column(db.Text, nullable=True) # 小象 for this line
+
+    __table_args__ = (db.UniqueConstraint('hexagram_id', 'line_number', name='_hexagram_line_uc'),)
+
+    def __repr__(self):
+        return f"<IChingLine {self.hexagram.name} {self.line_name}>"
+
 # --- Decorators for Auth ---
 def login_required(f):
     @wraps(f)

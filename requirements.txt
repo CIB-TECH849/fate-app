@@ -14,3 +14,4 @@ Flask-Cors
 pytz
 PyPDF2
 pdfminer.six
+beautifulsoup4
