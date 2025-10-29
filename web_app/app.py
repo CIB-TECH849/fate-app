@@ -1599,6 +1599,70 @@ def meihua_divine_page():
     user = User.query.get(session['user_id'])
     return render_template("meihua_divine.html", user=user)
 
+@app.route("/create_hexagram", methods=["GET", "POST"])
+@login_required
+@admin_required # Only admin can create hexagrams
+@log_request
+def create_hexagram():
+    if request.method == "POST":
+        name = request.form.get("name")
+        full_name = request.form.get("full_name")
+        number = request.form.get("number")
+        symbol = request.form.get("symbol")
+        hexagram_text = request.form.get("hexagram_text")
+        tuan_zhuan = request.form.get("tuan_zhuan")
+        xiang_zhuan_da = request.form.get("xiang_zhuan_da")
+        wen_yan = request.form.get("wen_yan")
+
+        if not name or not number:
+            flash("卦名和數字為必填項。", "error")
+            return redirect(url_for("create_hexagram"))
+
+        existing_hexagram = IChingHexagram.query.filter_by(name=name).first()
+        if existing_hexagram:
+            flash(f"卦名 {name} 已存在。", "error")
+            return redirect(url_for("create_hexagram"))
+        
+        existing_number = IChingHexagram.query.filter_by(number=number).first()
+        if existing_number:
+            flash(f"卦數 {number} 已存在。", "error")
+            return redirect(url_for("create_hexagram"))
+
+        hexagram = IChingHexagram(
+            name=name,
+            full_name=full_name,
+            number=number,
+            symbol=symbol,
+            hexagram_text=hexagram_text,
+            tuan_zhuan=tuan_zhuan,
+            xiang_zhuan_da=xiang_zhuan_da,
+            wen_yan=wen_yan
+        )
+        db.session.add(hexagram)
+        db.session.commit()
+
+        # Process lines
+        for i in range(1, 8): # 1 to 7 for lines (including 用九)
+            line_name = request.form.get(f"line_{i}_name")
+            line_text = request.form.get(f"line_{i}_text")
+            xiang_zhuan_xiao = request.form.get(f"line_{i}_xiang_zhuan_xiao")
+
+            if line_name and (line_text or xiang_zhuan_xiao): # Only save if line name and some content exist
+                line = IChingLine(
+                    hexagram_id=hexagram.id,
+                    line_number=i,
+                    line_name=line_name,
+                    line_text=line_text,
+                    xiang_zhuan_xiao=xiang_zhuan_xiao
+                )
+                db.session.add(line)
+        db.session.commit()
+
+        flash(f"卦象 {name} 建立成功！", "success")
+        return redirect(url_for("yilin_index")) # Redirect to yilin_index or a hexagram list page
+
+    return render_template("create_hexagram.html")
+
 @app.route("/admin", methods=['GET', 'POST'])
 @admin_required
 @log_request
@@ -1729,6 +1793,7 @@ def show_result(result_id):
 
 @app.route("/liuyao", methods=["GET", "POST"])
 @login_required
+@admin_required
 @log_request
 def liuyao_divine():
     if request.method == "POST":
@@ -1850,6 +1915,7 @@ def liuyao_divine():
 
 @app.route('/yilin_index')
 @login_required
+@admin_required
 @log_request
 def yilin_index():
     data = parse_sql_file()
@@ -1916,6 +1982,7 @@ def yilin_edit_verse(from_hex, to_hex):
 
 @app.route('/yilin_fate_calculator', methods=['GET', 'POST'])
 @login_required
+@admin_required
 @log_request
 def yilin_fate_calculator():
     result = None
