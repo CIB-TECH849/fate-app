@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>梅花易數線上占卜</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .form-section { margin-bottom: 2rem; }
+        .radio-group label { margin-right: 1.5rem; }
+        #number-inputs-container { display: block; } /* Initially visible */
+    </style>
 </head>
 <body>
     <div class="container">
@@ -17,62 +22,58 @@
                     <strong>{{ (3 - user.usage_count) if (3 - user.usage_count) > 0 else 0 }}</strong>
                 {% endif %}
             </span>
-            {% if user.is_admin %}
-                <a href="{{ url_for('admin') }}" style="margin-left: 1rem;">管理員後台</a>
-            {% endif %}
-            <a href="{{ url_for('liuyao_divine') }}" style="margin-left: 1rem;">六爻納甲占卜</a>
-            <a href="{{ url_for('yilin_index') }}" style="margin-left: 1rem;">焦氏易林編輯器</a>
-            <a href="{{ url_for('yilin_fate_calculator') }}" style="margin-left: 1rem;">焦氏直日卦計算機</a>
+            <a href="{{ url_for('index') }}" style="margin-left: 1rem;">返回主頁</a>
             <a href="{{ url_for('logout') }}" style="margin-left: 1rem;">登出</a>
         </div>
-        <h1>梅花易數線上占卜</h1>
+        <h1>梅花易數彙通占卜</h1>
 
-        <div class="notice-section">
-            <h2 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem;">數字占卜須知</h2>
-            <ol style="padding-left: 1.5rem; margin: 0;">
-                <li><b>誠心專注</b>：在占卜前，應誠心默念您想要詢問的事情。</li>
-                <li><b>三不原則</b>：遵循古老的占卜原則，即：
-                    <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
-                        <li>不誠不占：心意不誠懇，不要占卜。</li>
-                        <li>不義不占：事情不符合正道、不具正當性，不要占卜。</li>
-                        <li>不疑不占：沒有真正的疑問，不要為了測試而占卜。</li>
-                    </ul>
-                </li>
-            </ol>
-        </div>
-
-        <form id="divination-form" action="/divine" method="post">
-            <div class="form-group">
-                <label for="question">您想詢問的具體事由：</label>
+        <form id="divination-form" action="{{ url_for('meihua_divine_combined') }}" method="post">
+            
+            <div class="form-group form-section">
+                <label for="question"><b>第一步：輸入您的問題</b></label>
                 <textarea id="question" name="question" required></textarea>
             </div>
-            <div class="form-group">
-                <label for="category">占卜類別：</label>
-                <select id="category" name="category" required>
-                    <option value="general">綜合運勢</option>
-                    <option value="relationship">感情</option>
-                    <option value="career">事業財運</option>
-                    <option value="health">健康</option>
-                    <option value="study">學業考試</option>
+
+            <div class="form-group form-section">
+                <label><b>第二步：選擇起卦方式</b></label>
+                <div class="radio-group">
+                    <input type="radio" id="method_number" name="divination_method" value="numbers" checked>
+                    <label for="method_number">數字起卦</label>
+                    <input type="radio" id="method_time" name="divination_method" value="time">
+                    <label for="method_time">時間起卦</label>
+                </div>
+            </div>
+
+            <div id="number-inputs-container" class="form-section">
+                <p>請輸入三組三位數的數字 (100-999)：</p>
+                <div class="number-inputs">
+                    <div class="form-group">
+                        <label for="num1">第一組 (上卦)</label>
+                        <input type="number" id="num1" name="num1" min="100" max="999">
+                    </div>
+                    <div class="form-group">
+                        <label for="num2">第二組 (下卦)</label>
+                        <input type="number" id="num2" name="num2" min="100" max="999">
+                    </div>
+                    <div class="form-group">
+                        <label for="num3">第三組 (變爻)</label>
+                        <input type="number" id="num3" name="num3" min="100" max="999">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group form-section">
+                <label for="interpretation_method"><b>第三步：選擇解卦模型</b></label>
+                <select id="interpretation_method" name="interpretation_method" required>
+                    <option value="takashima">高島解卦 (通用)</option>
+                    <option value="tiyong">體用解卦 (固定體用)</option>
+                    <option value="xinyi">心易解卦 (動靜體用)</option>
                 </select>
             </div>
-            <p>請輸入三組三位數的數字 (100-999)：</p>
-            <div class="number-inputs">
-                <div class="form-group">
-                    <label for="num1">第一組 (上卦)</label>
-                    <input type="number" id="num1" name="num1" min="100" max="999" required>
-                </div>
-                <div class="form-group">
-                    <label for="num2">第二組 (下卦)</label>
-                    <input type="number" id="num2" name="num2" min="100" max="999" required>
-                </div>
-                <div class="form-group">
-                    <label for="num3">第三組 (變爻)</label>
-                    <input type="number" id="num3" name="num3" min="100" max="999" required>
-                </div>
-            </div>
+
             <button type="submit">開始占卜</button>
         </form>
+
         <div id="loading" class="loading">
             <div class="loader"></div>
             <p>正在為您解卦，請稍候...</p>
@@ -80,10 +81,44 @@
     </div>
 
     <script>
-        document.getElementById('divination-form').addEventListener('submit', function() {
-            document.getElementById('divination-form').style.display = 'none';
+        const form = document.getElementById('divination-form');
+        const numberInputs = document.getElementById('number-inputs-container');
+        const num1 = document.getElementById('num1');
+        const num2 = document.getElementById('num2');
+        const num3 = document.getElementById('num3');
+
+        document.querySelectorAll('input[name="divination_method"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'numbers') {
+                    numberInputs.style.display = 'block';
+                    num1.required = true;
+                    num2.required = true;
+                    num3.required = true;
+                } else {
+                    numberInputs.style.display = 'none';
+                    num1.required = false;
+                    num2.required = false;
+                    num3.required = false;
+                }
+            });
+        });
+
+        form.addEventListener('submit', function() {
+            form.style.display = 'none';
             document.getElementById('loading').style.display = 'block';
         });
+
+        // Initial state based on default checked radio
+        if (document.getElementById('method_number').checked) {
+            num1.required = true;
+            num2.required = true;
+            num3.required = true;
+        } else {
+            numberInputs.style.display = 'none';
+            num1.required = false;
+            num2.required = false;
+            num3.required = false;
+        }
     </script>
 </body>
 </html>

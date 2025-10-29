@@ -114,20 +114,34 @@
         <p>{{ question }}</p>
 
         <h2>起卦資訊</h2>
-        <div class="info-grid">
-            <div class="info-item">
-                <p><strong>起卦數字:</strong> {{ numbers[0] }} (上), {{ numbers[1] }} (下), {{ numbers[2] }} (爻)</p>
+        {% if calculation_method == 'auto' and calculation_details %}
+            <div class="calculation-details">
+                <h4>年月日時自動起卦過程：</h4>
+                <p><b>上卦:</b> (年支{{ calculation_details.year_num }} + 月{{ calculation_details.lunar_month }} + 日{{ calculation_details.lunar_day }}) = {{ calculation_details.upper_trigram_sum }} → {{ calculation_details.upper_trigram_sum }} ÷ 8, 餘數為 {{ calculation_details.upper_trigram_num }} → <b>{{ calculation_details.upper_trigram_name }}卦</b></p>
+                <p><b>下卦:</b> ({{ calculation_details.upper_trigram_sum }} + 時{{ calculation_details.hour_num }} + 分{{ calculation_details.minute_num }} + 秒{{ calculation_details.second_num }}) = {{ calculation_details.total_sum }} → {{ calculation_details.total_sum }} ÷ 8, 餘數為 {{ calculation_details.lower_trigram_num }} → <b>{{ calculation_details.lower_trigram_name }}卦</b></p>
+                <p><b>動爻:</b> {{ calculation_details.total_sum }} ÷ 6, 餘數為 {{ calculation_details.moving_line_num }} → <b>第 {{ calculation_details.moving_line_num }} 爻動</b></p>
+                <p><strong>本卦 -> 變卦:</strong> {{ hex_data['本卦'].name }} <span class="hex-symbol">{{ main_hex_symbol }}</span> -> {{ hex_data['變卦'].name }} <span class="hex-symbol">{{ changing_hex_symbol }}</span></p>
             </div>
             <div class="info-item">
-                <p><strong>本卦 -> 變卦:</strong> {{ hex_data['本卦'].name }} -> {{ hex_data['變卦'].name }}</p>
+                <p><strong>互卦:</strong> {{ hex_data['互卦'].name }} <span class="hex-symbol">{{ mutual_hex_symbol }}</span></p>
+                </div>
             </div>
-            <div class="info-item">
-                <p><strong>互卦:</strong> {{ hex_data['互卦'].name }}</p>
+        {% else %}
+            <div class="info-grid">
+                <div class="info-item">
+                    <p><strong>起卦數字:</strong> {{ numbers[0] }} (上), {{ numbers[1] }} (下), {{ numbers[2] }} (爻)</p>
+                </div>
+                <div class="info-item">
+                    <p><strong>本卦 -> 變卦:</strong> {{ hex_data['本卦'].name }} -> {{ hex_data['變卦'].name }}</p>
+                </div>
+                <div class="info-item">
+                    <p><strong>互卦:</strong> {{ hex_data['互卦'].name }}</p>
+                </div>
+                <div class="info-item">
+                    <p><strong>動爻:</strong> 第 {{ moving_line }} 爻</p>
+                </div>
             </div>
-            <div class="info-item">
-                <p><strong>動爻:</strong> 第 {{ moving_line }} 爻</p>
-            </div>
-        </div>
+        {% endif %}
 
         <h2>綜合解讀</h2>
         <div class="interpretation-content">
@@ -135,9 +149,7 @@
         </div>
 
         <a href="/" class="back-link">返回主頁重新占卜</a>
-        {% if result_id %}
-        <a href="{{ url_for('download_pdf', result_id=result_id) }}" class="back-link" style="background-color: #28a745;">下載 PDF 報告</a>
-        {% endif %}
+
     </div>
 </body>
 </html>

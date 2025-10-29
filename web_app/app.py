@@ -35,6 +35,11 @@ from fpdf.enums import XPos, YPos
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from flask_cors import CORS
+import sxtwl
+
+# --- 天干地支對應 ---
+GAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
 
 # --- 將專案根目錄添加到 Python 路徑中 ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -256,7 +261,7 @@ def calculate_hexagram(num1: int, num2: int, num3: int) -> Tuple[List[int], int]
     lines = trigram_lines_map[lower_trigram_num] + trigram_lines_map[upper_trigram_num]
     return lines, moving_line_num
 
-def generate_interpretation_prompt(question: str, numbers: Tuple[int, int, int], hex_data: Dict, moving_line_index: int) -> str:
+def generate_takashima_prompt(question: str, numbers: Tuple[int, int, int], hex_data: Dict, moving_line_index: int) -> str:
     main_hex = hex_data.get("本卦", {})
     mutual_hex = hex_data.get("互卦", {})
     changing_hex = hex_data.get("變卦", {})
@@ -1063,6 +1068,89 @@ def send_liuyao_email(question, input_date, day_info_str, main_analysis, changed
         db.session.add(log_entry)
         db.session.commit()
 
+def send_auto_divination_email(question, hex_data, interpretation_html, user, calculation_details):
+    start_time = datetime.datetime.now()
+    success = False
+    error_message = None
+    response_status_code = None
+    response_content = None
+
+    try:
+        subject = f"梅花易數自動占卜結果：{question[:20]}..."
+        
+        trigram_map = {1: '乾', 2: '兌', 3: '離', 4: '震', 5: '巽', 6: '坎', 7: '艮', 8: '坤'}
+        year_zhi_name = ZHI[calculation_details['year_num']-1]
+        hour_zhi_name = ZHI[calculation_details['hour_num']-1]
+        
+        body_html = f'''
+        <html>
+        <body style="font-family: sans-serif;">
+            <h2>占卜問題：</h2>
+            <p>{question}</p>
+            <hr>
+            <h2>起卦資訊 (年月日時自動)：</h2>
+            <ul>
+                <li><b>占卜會員：</b> {user['username']}</li>
+                <li><b>年支({year_zhi_name}):</b> {calculation_details['year_num']}</li>
+                <li><b>農曆月:</b> {calculation_details['lunar_month']}</li>
+                <li><b>農曆日:</b> {calculation_details['lunar_day']}</li>
+                <li><b>時支({hour_zhi_name}):</b> {calculation_details['hour_num']}</li>
+            </ul>
+            <h4>計算過程：</h4>
+            <p><b>上卦:</b> (年+月+日) = {calculation_details['upper_trigram_sum']} → 餘 {calculation_details['upper_trigram_num']} → {trigram_map[calculation_details['upper_trigram_num']]}卦</p>
+            <p><b>下卦:</b> (年+月+日+時+分+秒) = {calculation_details['total_sum']} → 餘 {calculation_details['lower_trigram_num']} → {trigram_map[calculation_details['lower_trigram_num']]}卦</p>
+            <p><b>動爻:</b> (年+月+日+時+分+秒) = {calculation_details['total_sum']} → 餘 {calculation_details['moving_line_num']} → 第 {calculation_details['moving_line_num']} 爻動</p>
+            <hr>
+            <h2>卦象結果：</h2>
+            <ul>
+                <li><b>本卦 -> 變卦：</b> {hex_data['本卦'].get('name')} -> {hex_data['變卦'].get('name')}</li>
+                <li><b>互卦：</b> {hex_data['互卦'].get('name')}</li>
+            </ul>
+            <hr>
+            <h2>AI 綜合解讀：</h2>
+            {interpretation_html}
+        </body>
+        </html>
+        '''
+        message = Mail(
+            from_email='is33.wu@gmail.com',
+            to_emails='is33.wu@gmail.com',
+            subject=subject,
+            html_content=body_html
+        )
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        response = sg.send(message)
+        response_status_code = response.status_code
+        response_content = response.body
+        if not (200 <= response.status_code < 300):
+            flash(f'郵件發送失敗，錯誤碼：{response.status_code}', 'error')
+            error_message = f'SendGrid 錯誤碼: {response.status_code}'
+        else:
+            success = True
+    except Exception as e:
+        print(f"Auto divination email sending failed: {e}")
+        flash(f'自動占卜郵件發送時發生錯誤: {e}', 'error')
+        error_message = str(e)
+    finally:
+        end_time = datetime.datetime.now()
+        duration_ms = (end_time - start_time).total_seconds() * 1000
+        log_entry = ExternalApiLog(
+            timestamp=start_time,
+            api_name='SendGrid (Auto)',
+            endpoint='/mail/send',
+            method='POST',
+            request_payload=f"Subject: {subject}, To: is33.wu@gmail.com",
+            response_status_code=response_status_code,
+            response_content=str(response_content),
+            duration_ms=duration_ms,
+            success=success,
+            error_message=error_message
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+
+
+
 @app.route("/api/meihua_divine", methods=["POST"])
 @api_key_required
 @log_request
@@ -1730,39 +1818,393 @@ def delete_user(user_id):
         flash(f"會員 {user_to_delete.username} 已被成功刪除。", 'success')
     return redirect(url_for('admin'))
 
-@app.route("/divine", methods=["POST"])
+
+def generate_tiyong_prompt(question: str, category: str, hex_data: Dict, moving_line_index: int, calculation_details: Dict) -> str:
+    main_hex = hex_data.get("本卦", {})
+    changing_hex = hex_data.get("變卦", {})
+    mutual_hex = hex_data.get("互卦", {})
+
+    trigram_map = {1: '乾', 2: '兌', 3: '離', 4: '震', 5: '巽', 6: '坎', 7: '艮', 8: '坤'}
+    trigram_elements = {
+        '乾': '金', '兌': '金',
+        '離': '火',
+        '震': '木', '巽': '木',
+        '坎': '水',
+        '艮': '土', '坤': '土'
+    }
+    
+    # 體用判定 (Fixed rule: Lower is Ti, Upper is Yong)
+    lower_trigram_name = calculation_details['lower_trigram_name']
+    upper_trigram_name = calculation_details['upper_trigram_name']
+    ti_trigram_name = lower_trigram_name
+    yong_trigram_name = upper_trigram_name
+    ti_element = trigram_elements.get(ti_trigram_name, "未知")
+    yong_element = trigram_elements.get(yong_trigram_name, "未知")
+
+    # 五行生剋關係
+    five_element_relations = {
+        '木': {"produces": '火', "conquers": '土'},
+        '火': {"produces": '土', "conquers": '金'},
+        '土': {"produces": '金', "conquers": '水'},
+        '金': {"produces": '水', "conquers": '木'},
+        '水': {"produces": '木', "conquers": '火'}
+    }
+    ti_yong_relation = ""
+    if ti_element == yong_element:
+        ti_yong_relation = "體用比和"
+    elif five_element_relations.get(ti_element, {}).get("produces") == yong_element:
+        ti_yong_relation = "體生用"
+    elif five_element_relations.get(yong_element, {}).get("produces") == ti_element:
+        ti_yong_relation = "用生體"
+    elif five_element_relations.get(ti_element, {}).get("conquers") == yong_element:
+        ti_yong_relation = "體剋用"
+    elif five_element_relations.get(yong_element, {}).get("conquers") == ti_element:
+        ti_yong_relation = "用剋體"
+
+    # 分支占法推論
+    branch_deduction = ""
+    if category == "求名":
+        rules = {
+            "體剋用": "名可成但成遲。",
+            "用剋體": "名不可成。",
+            "體生用": "名不可就，或因名有喪。",
+            "用生體": "名易成，或因名有得。",
+            "體用比和": "功名稱意。"
+        }
+        branch_deduction = f"【求名占法】：體為主，用為名。此卦為「{ti_yong_relation}」，故 {rules.get(ti_yong_relation, '事體複雜，難以一言蔽之。')}"
+    elif category == "求財":
+        rules = {
+            "體剋用": "有財。",
+            "用剋體": "無財。",
+            "體生用": "財上有損。",
+            "用生體": "財上有進益。",
+            "體用比和": "財利快意。"
+        }
+        branch_deduction = f"【求財占法】：體為主，用為財。此卦為「{ti_yong_relation}」，故 {rules.get(ti_yong_relation, '財運變化，難以一言蔽之。')}"
+    elif category == "疾病":
+        rules = {
+            "體剋用": "病易安。",
+            "用剋體": "雖藥無功。",
+            "體生用": "病難愈。",
+            "用生體": "即愈。",
+            "體用比和": "易安。"
+        }
+        branch_deduction = f"【疾病占法】：體為病人，用為病症。此卦為「{ti_yong_relation}」，故 {rules.get(ti_yong_relation, '病情複雜，難以一言蔽之。')}"
+    else: # 綜合或其他
+        branch_deduction = "此占類無特定分支占法，請依體用生剋、卦象、爻辭等進行綜合判斷。"
+
+    now = datetime.datetime.now(TAIWAN_TZ)
+    time_str = now.strftime('%Y年%m月%d日 %H時')
+
+    prompt = f'''
+你是一位梅花易數與京房納甲兼通的易學占斷師。
+請根據以下卦象資料，為我解卦，重點在「實際占斷」與「應期建議」。
+
+【輸入】
+- 占問主題：{category}
+- 本卦：{main_hex.get('name', '未知')} ({upper_trigram_name}上{lower_trigram_name}下)
+- 變卦：{changing_hex.get('name', '未知')}
+- 互卦（如有）：{mutual_hex.get('name', '未知')}
+- 動爻：第 {moving_line_index} 爻
+- 起卦時間（年月日時）：{time_str}
+- 問卜目的（如：升遷、投資、疾病康復、訴訟勝負等）：{question}
+
+【分析步驟】
+嚴格按照以下格式與步驟輸出：
+
+【卦象說明】
+(說明本卦上下卦結構、卦德與象義；註明五行屬性與季節旺衰)
+
+【體用五行與生剋】
+(判定體卦為{ti_trigram_name}({ti_element})，用卦為{yong_trigram_name}({yong_element})，其關係為「{ti_yong_relation}」，並解釋此關係在占卜中的基本吉凶意義)
+
+【分支占法推論】
+({branch_deduction})
+
+【互卦變卦分析】
+(以互卦 {mutual_hex.get('name', '未知')} 為事之中程；以變卦 {changing_hex.get('name', '未知')} 為結果。若本卦吉變凶則吉中有阻；若本卦凶變吉則凶中有救)
+
+【卦氣與應期】
+(以生體之卦為吉時，剋體之卦為凶期；卦氣旺時應事快，衰時遲。例如：春木旺震巽，夏火旺離，秋金旺乾兌，冬水旺坎，土旺辰戌丑未月)
+
+【綜合判語】
+(用一句話總結「吉／凶／遲／速」；再以具體語言建議行動（宜守／宜進／宜謙／宜避／宜改方位等))
+'''
+    return prompt
+
+@app.route("/meihua_auto", methods=["POST"])
 @login_required
 @log_request
-def divine():
+def meihua_auto_divine():
     user = User.query.get(session['user_id'])
     if not user.is_admin and user.usage_count >= 3:
-        flash(f'您的占卜次數已達 3 次上限，無法再使用。', 'error')
+        flash('您的占卜次數已達 3 次上限，無法再使用。', 'error')
         return redirect(url_for('meihua_divine_page'))
+
     question = request.form.get("question")
-    category = request.form.get("category") # Get the category
-
-    try:
-        num1 = int(request.form.get("num1"))
-        num2 = int(request.form.get("num2"))
-        num3 = int(request.form.get("num3"))
-        numbers = (num1, num2, num3)
-    except (ValueError, TypeError):
-        flash("輸入的數字格式錯誤，請返回上一頁修正。", "error")
+    category = request.form.get("category")
+    if not question or not category:
+        flash("請輸入您的問題並選擇占卜類別。", "error")
         return redirect(url_for('meihua_divine_page'))
-    lines, moving_line = calculate_hexagram(num1, num2, num3)
-    hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
 
-    # Select prompt based on category
-    if category == "relationship":
-        prompt = generate_relationship_prompt(question, hex_data, moving_line)
-    else: # Default to general interpretation
-        prompt = generate_interpretation_prompt(question, numbers, hex_data, moving_line)
+    now = datetime.datetime.now(TAIWAN_TZ)
+    day = sxtwl.fromSolar(now.year, now.month, now.day)
+    
+    year_zhi_index = day.getYearGZ().dz
+    hour_zhi_index = day.getHourGZ(now.hour).dz
+
+    year_num = year_zhi_index + 1
+    lunar_month = day.getLunarMonth()
+    lunar_day = day.getLunarDay()
+    hour_num = hour_zhi_index + 1
+    minute_num = now.minute
+    second_num = now.second
+
+    upper_trigram_sum = year_num + lunar_month + lunar_day
+    total_sum = upper_trigram_sum + hour_num + minute_num + second_num
+
+    upper_trigram_num = upper_trigram_sum % 8 or 8
+    lower_trigram_num = total_sum % 8 or 8
+    moving_line_num = total_sum % 6 or 6
+
+    trigram_lines_map = {
+        1: [1,1,1], 2: [1,1,0], 3: [1,0,1], 4: [1,0,0],
+        5: [0,1,1], 6: [0,1,0], 7: [0,0,1], 8: [0,0,0]
+    }
+    lines = trigram_lines_map[lower_trigram_num] + trigram_lines_map[upper_trigram_num]
+    
+    numbers = (year_num, lunar_month, lunar_day, hour_num, minute_num, second_num)
+
+    hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line_num)
+    
+    trigram_map = {1: '乾', 2: '兌', 3: '離', 4: '震', 5: '巽', 6: '坎', 7: '艮', 8: '坤'}
+    calculation_details = {
+        'year_num': year_num,
+        'lunar_month': lunar_month,
+        'lunar_day': lunar_day,
+        'hour_num': hour_num,
+        'minute_num': minute_num,
+        'second_num': second_num,
+        'upper_trigram_sum': upper_trigram_sum,
+        'upper_trigram_num': upper_trigram_num,
+        'total_sum': total_sum,
+        'lower_trigram_num': lower_trigram_num,
+        'moving_line_num': moving_line_num,
+        'upper_trigram_name': trigram_map[upper_trigram_num],
+        'lower_trigram_name': trigram_map[lower_trigram_num]
+    }
+
+    prompt = generate_auto_interpretation_prompt(question, category, hex_data, moving_line_num, calculation_details)
+    
     interpretation_html = call_gemini_api(prompt)
+
     result_id = None
     if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
         user.usage_count += 1
         db.session.commit()
-        send_divination_email(question, numbers, hex_data, interpretation_html, {'username': user.username})
+        
+        result_id = uuid.uuid4().hex
+        TEMP_RESULTS[result_id] = {
+            'question': question,
+            'numbers': numbers,
+            'hex_data': hex_data,
+            'moving_line': moving_line_num,
+            'interpretation_html': interpretation_html,
+            'user': {'username': user.username},
+            'calculation_method': 'auto',
+            'calculation_details': calculation_details
+        }
+        
+        send_auto_divination_email(question, hex_data, interpretation_html, {'username': user.username}, calculation_details)
+        
+        return redirect(url_for('show_result', result_id=result_id))
+    
+    return redirect(url_for('meihua_divine_page'))
+
+def generate_xinyi_prompt(question: str, category: str, hex_data: Dict, moving_line_index: int, calculation_details: Dict) -> str:
+    main_hex_name = hex_data.get("本卦", {}).get('name', '未知')
+    changing_hex_name = hex_data.get("變卦", {}).get('name', '未知')
+    mutual_hex_name = hex_data.get("互卦", {}).get('name', '未知')
+
+    trigram_map = {1: '乾', 2: '兌', 3: '離', 4: '震', 5: '巽', 6: '坎', 7: '艮', 8: '坤'}
+    trigram_elements = {
+        '乾': '金', '兌': '金', '離': '火', '震': '木', '巽': '木', '坎': '水', '艮': '土', '坤': '土'
+    }
+    
+    # 體用判定 (New Rule: Still is Ti, Moving is Yong)
+    upper_trigram_num = calculation_details['upper_trigram_num']
+    lower_trigram_num = calculation_details['lower_trigram_num']
+    upper_trigram_name = trigram_map[upper_trigram_num]
+    lower_trigram_name = trigram_map[lower_trigram_num]
+
+    ti_trigram_name = ""
+    yong_trigram_name = ""
+    if 1 <= moving_line_index <= 3: # 動爻在下卦
+        ti_trigram_name = upper_trigram_name
+        yong_trigram_name = lower_trigram_name
+    elif 4 <= moving_line_index <= 6: # 動爻在上卦
+        ti_trigram_name = lower_trigram_name
+        yong_trigram_name = upper_trigram_name
+
+    ti_element = trigram_elements.get(ti_trigram_name, "未知")
+    yong_element = trigram_elements.get(yong_trigram_name, "未知")
+
+    # 五行生剋關係
+    five_element_relations = {
+        '木': {"produces": '火', "conquers": '土'},
+        '火': {"produces": '土', "conquers": '金'},
+        '土': {"produces": '金', "conquers": '水'},
+        '金': {"produces": '水', "conquers": '木'},
+        '水': {"produces": '木', "conquers": '火'}
+    }
+    ti_yong_relation = ""
+    ti_yong_rule_text = ""
+    if ti_element == yong_element:
+        ti_yong_relation = "體用比和"
+        ti_yong_rule_text = "比和，平穩"
+    elif five_element_relations.get(ti_element, {}).get("produces") == yong_element:
+        ti_yong_relation = "體生用 (洩氣)"
+        ti_yong_rule_text = "體生用，耗氣"
+    elif five_element_relations.get(yong_element, {}).get("produces") == ti_element:
+        ti_yong_relation = "用生體"
+        ti_yong_rule_text = "用生體，吉"
+    elif five_element_relations.get(ti_element, {}).get("conquers") == yong_element:
+        ti_yong_relation = "體剋用"
+        ti_yong_rule_text = "體剋用，吉"
+    elif five_element_relations.get(yong_element, {}).get("conquers") == ti_element:
+        ti_yong_relation = "用剋體"
+        ti_yong_rule_text = "用剋體，事難成"
+
+    # 找出宮位五行
+    def get_palace_element(hex_name):
+        for palace, hex_list in liuyao.PALACE_DATA.items():
+            if hex_name in hex_list:
+                return liuyao.PALACE_ELEMENTS[palace]
+        return "未知"
+
+    mutual_hex_element = get_palace_element(mutual_hex_name)
+    changing_hex_element = get_palace_element(changing_hex_name)
+
+    now = datetime.datetime.now(TAIWAN_TZ)
+    time_str = now.strftime('%Y年%m月%d日 %H時')
+
+    prompt = f'''
+你是一位精通《周易》與《梅花易數》、《心易》理論的易學大師，通曉「體用互變」、「五行生剋」、「世應關係」、「內外卦」、「衰旺動靜」、「外應取象」等古法占斷。
+請根據以下卦象資料，生成一份完整、條理清晰、符合心易原則的卦象分析報告。
+
+【輸入資料】
+- 占問主題：{category}
+- 本卦：{main_hex_name} ({upper_trigram_name}上{lower_trigram_name}下)
+- 變卦：{changing_hex_name}
+- 互卦：{mutual_hex_name}
+- 動爻：第 {moving_line_index} 爻
+- 起卦時間：{time_str}
+- 問卜目的：{question}
+
+請嚴格遵循以下分析步驟與指導原則：
+
+【卦象總論】
+(簡述本卦、互卦、變卦的卦名與卦辭，點出核心象義。)
+
+【體用分析（心易法）】
+(根據「靜者為體，動者為用」的原則，判定體卦為 {ti_trigram_name}({ti_element})，用卦為 {yong_trigram_name}({yong_element})。此卦體用關係為「{ti_yong_relation}」。根據「{ti_yong_rule_text}」的原則，對此事的初步吉凶作出判斷。)
+
+【互卦與變卦分析】
+(互卦 {mutual_hex_name} (屬{mutual_hex_element}) 為事之中程，分析其五行與體卦的關係，判斷中途發展。變卦 {changing_hex_name} (屬{changing_hex_element}) 為事之終，分析其五行與體卦的關係，判斷最終結果。例如：若變卦生體則結局吉，剋體則結局凶。)
+
+【衰旺與動靜】
+(根據起卦時間 {time_str} 的季節，判斷體卦 {ti_trigram_name}({ti_element}) 的五行旺衰。再根據動爻位置，分析其在內外卦的動靜意義。例如：動爻在內卦主內變，在外卦主外動。)
+
+【外應取象】
+(此為可選步驟，若有顯著外應，可根據 {ti_trigram_name}卦 與 {yong_trigram_name}卦 的八卦萬物類象進行比喻，使占斷更形象化。例如乾為首、坤為腹等。)
+
+【綜合判語】
+(綜合以上所有分析，用一句話總結「吉／凶／遲／速」，並提出具體建議。)
+'''
+    return prompt
+
+@app.route("/meihua_divine_combined", methods=["POST"])
+@login_required
+@log_request
+def meihua_divine_combined():
+    user = User.query.get(session['user_id'])
+    if not user.is_admin and user.usage_count >= 3:
+        flash('您的占卜次數已達 3 次上限，無法再使用。', 'error')
+        return redirect(url_for('meihua_divine_page'))
+
+    # Get common form data
+    question = request.form.get("question")
+    divination_method = request.form.get("divination_method")
+    interpretation_method = request.form.get("interpretation_method")
+    category = request.form.get("category") # Used by some prompts
+
+    if not all([question, divination_method, interpretation_method]):
+        flash("請完整填寫所有必填欄位。", "error")
+        return redirect(url_for('meihua_divine_page'))
+
+    lines, moving_line, numbers, calculation_details = None, None, None, None
+
+    # Step 1: Generate Hexagram based on method
+    if divination_method == 'numbers':
+        try:
+            num1 = int(request.form.get("num1"))
+            num2 = int(request.form.get("num2"))
+            num3 = int(request.form.get("num3"))
+            numbers = (num1, num2, num3)
+            lines, moving_line = calculate_hexagram(num1, num2, num3)
+        except (ValueError, TypeError):
+            flash("數字起卦格式錯誤，請返回上一頁修正。", "error")
+            return redirect(url_for('meihua_divine_page'))
+    
+    elif divination_method == 'time':
+        now = datetime.datetime.now(TAIWAN_TZ)
+        day = sxtwl.fromSolar(now.year, now.month, now.day)
+        year_zhi_index = day.getYearGZ().dz
+        hour_zhi_index = day.getHourGZ(now.hour).dz
+        year_num, lunar_month, lunar_day = year_zhi_index + 1, day.getLunarMonth(), day.getLunarDay()
+        hour_num, minute_num, second_num = hour_zhi_index + 1, now.minute, now.second
+        
+        upper_trigram_sum = year_num + lunar_month + lunar_day
+        total_sum = upper_trigram_sum + hour_num + minute_num + second_num
+        upper_trigram_num = upper_trigram_sum % 8 or 8
+        lower_trigram_num = total_sum % 8 or 8
+        moving_line = total_sum % 6 or 6
+
+        trigram_lines_map = {1:[1,1,1], 2:[1,1,0], 3:[1,0,1], 4:[1,0,0], 5:[0,1,1], 6:[0,1,0], 7:[0,0,1], 8:[0,0,0]}
+        lines = trigram_lines_map[lower_trigram_num] + trigram_lines_map[upper_trigram_num]
+        numbers = (year_num, lunar_month, lunar_day, hour_num, minute_num, second_num)
+        trigram_map = {1: '乾', 2: '兌', 3: '離', 4: '震', 5: '巽', 6: '坎', 7: '艮', 8: '坤'}
+        calculation_details = {
+            'year_num': year_num, 'lunar_month': lunar_month, 'lunar_day': lunar_day,
+            'hour_num': hour_num, 'minute_num': minute_num, 'second_num': second_num,
+            'upper_trigram_sum': upper_trigram_sum, 'upper_trigram_num': upper_trigram_num,
+            'total_sum': total_sum, 'lower_trigram_num': lower_trigram_num, 'moving_line_num': moving_line,
+            'upper_trigram_name': trigram_map[upper_trigram_num], 'lower_trigram_name': trigram_map[lower_trigram_num]
+        }
+    else:
+        flash("無效的起卦方式。", "error")
+        return redirect(url_for('meihua_divine_page'))
+
+    # Step 2: Generate Prompt based on interpretation method
+    hex_data = meihua.interpret_hexagrams_from_lines(lines, moving_line)
+    prompt = ""
+
+    if interpretation_method == 'takashima':
+        prompt = generate_takashima_prompt(question, numbers, hex_data, moving_line)
+    elif interpretation_method == 'tiyong':
+        prompt = generate_tiyong_prompt(question, category, hex_data, moving_line, calculation_details)
+    elif interpretation_method == 'xinyi':
+        prompt = generate_xinyi_prompt(question, category, hex_data, moving_line, calculation_details)
+    else:
+        flash("無效的解卦方式。", "error")
+        return redirect(url_for('meihua_divine_page'))
+
+    # Step 3: Call API and show result
+    interpretation_html = call_gemini_api(prompt)
+
+    if user and "呼叫 Gemini API 時出錯" not in interpretation_html:
+        user.usage_count += 1
+        db.session.commit()
         result_id = uuid.uuid4().hex
         TEMP_RESULTS[result_id] = {
             'question': question,
@@ -1770,9 +2212,20 @@ def divine():
             'hex_data': hex_data,
             'moving_line': moving_line,
             'interpretation_html': interpretation_html,
-            'user': {'username': user.username}
+            'user': {'username': user.username},
+            'calculation_method': divination_method, # 'numbers' or 'time'
+            'calculation_details': calculation_details
         }
+        # Email logic
+        if divination_method == 'numbers':
+            send_divination_email(question, numbers, hex_data, interpretation_html, {'username': user.username})
+        elif divination_method == 'time':
+            send_auto_divination_email(question, hex_data, interpretation_html, {'username': user.username}, calculation_details)
+
         return redirect(url_for('show_result', result_id=result_id))
+    
+    flash('AI 解讀時發生錯誤，請稍後再試。', 'error')
+    return redirect(url_for('meihua_divine_page'))
 
 @app.route("/result/<result_id>")
 @login_required
@@ -1782,14 +2235,36 @@ def show_result(result_id):
     if not result_data:
         flash('找不到占卜結果或連結已失效。', 'error')
         return redirect(url_for('index'))
-    
+
+    def get_symbol_from_full_name(full_name):
+        if not full_name or full_name == "未知卦":
+            return ""
+        if "為" in full_name:
+            short_name = full_name.split("為")[0]
+            if short_name in HEX_INFO:
+                return HEX_INFO[short_name]["symbol"]
+        for short_name in sorted(HEX_INFO.keys(), key=len, reverse=True):
+            if short_name in full_name:
+                return HEX_INFO[short_name]["symbol"]
+        return ""
+
+    hex_data = result_data.get('hex_data', {})
+    main_hex_symbol = get_symbol_from_full_name(hex_data.get('本卦', {}).get('name'))
+    changing_hex_symbol = get_symbol_from_full_name(hex_data.get('變卦', {}).get('name'))
+    mutual_hex_symbol = get_symbol_from_full_name(hex_data.get('互卦', {}).get('name'))
+
     return render_template("result.html", 
-                           question=result_data['question'], 
-                           numbers=result_data['numbers'],
-                           hex_data=result_data['hex_data'],
-                           moving_line=result_data['moving_line'],
-                           interpretation=result_data['interpretation_html'],
-                           result_id=result_id)
+                           question=result_data.get('question'), 
+                           numbers=result_data.get('numbers'),
+                           hex_data=hex_data,
+                           moving_line=result_data.get('moving_line'),
+                           interpretation=result_data.get('interpretation_html'),
+                           result_id=result_id,
+                           calculation_method=result_data.get('calculation_method', 'manual'),
+                           calculation_details=result_data.get('calculation_details'),
+                           main_hex_symbol=main_hex_symbol,
+                           changing_hex_symbol=changing_hex_symbol,
+                           mutual_hex_symbol=mutual_hex_symbol)
 
 @app.route("/liuyao", methods=["GET", "POST"])
 @login_required
@@ -2006,50 +2481,7 @@ def yilin_fate_calculator():
 
     return render_template('yilin_fate_calculator.html', result=result, solar_term=solar_term, input_date=input_date_str)
 
-@app.route("/download_pdf/<result_id>")
-@login_required
-@log_request
-def download_pdf(result_id):
-    last_result = TEMP_RESULTS.pop(result_id, None)
-    if not last_result:
-        flash('找不到占卜結果或下載連結已失效。', 'error')
-        return redirect(url_for('index'))
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.add_font('NotoSansTC', '', 'NotoSansTC-Regular.ttf')
-        pdf.set_font('NotoSansTC', '', 16)
-        pdf.cell(0, 15, '梅花易數占卜報告', new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-        pdf.ln(10)
-        pdf.set_font('NotoSansTC', '', 14)
-        pdf.cell(0, 10, '占卜問題：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font('NotoSansTC', '', 12)
-        pdf.multi_cell(0, 8, last_result['question'])
-        pdf.ln(5)
-        pdf.set_font('NotoSansTC', '', 14)
-        pdf.cell(0, 10, '起卦資訊：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font('NotoSansTC', '', 12)
-        info_text = (
-            f"占卜會員： {last_result['user']['username']}\n"
-            f"起卦數字： {last_result['numbers'][0]} (上), {last_result['numbers'][1]} (下), {last_result['numbers'][2]} (爻)\n"
-            f"本卦 -> 變卦： {last_result['hex_data']['本卦'].get('name')} -> {last_result['hex_data']['變卦'].get('name')}\n"
-            f"互卦： {last_result['hex_data']['互卦'].get('name')}"
-        )
-        pdf.multi_cell(0, 8, info_text)
-        pdf.ln(5)
-        pdf.set_font('NotoSansTC', '', 14)
-        pdf.cell(0, 10, 'AI 綜合解讀：', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font('NotoSansTC', '', 12)
-        interpretation_text = re.sub('<[^<]+?>', '', last_result['interpretation_html']).strip()
-        pdf.multi_cell(0, 8, interpretation_text)
-        pdf_output = pdf.output()
-        response = Response(pdf_output, mimetype='application/pdf')
-        response.headers['Content-Disposition'] = f'attachment; filename=divination_report_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pdf'
-        return response
-    except Exception as e:
-        print(f"PDF Generation Error: {e}")
-        flash(f'產生 PDF 時發生錯誤: {e}', 'error')
-        return redirect(url_for('index'))
+
 
 @app.errorhandler(500)
 def internal_server_error(e):

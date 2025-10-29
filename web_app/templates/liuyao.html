@@ -49,9 +49,22 @@
             </div>
             <button type="submit">開始占卜</button>
         </form>
+        <div id="loading" class="loading">
+            <div class="loader"></div>
+            <p>正在為您解卦，請稍候...</p>
+        </div>
+
         <div class="back-link">
             <p><a href="{{ url_for('index') }}">返回首頁</a></p>
         </div>
     </div>
+
+    <script>
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function() {
+            form.style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+        });
+    </script>
 </body>
 </html>
